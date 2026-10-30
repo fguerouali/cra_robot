@@ -16,6 +16,8 @@ def _destination(path: bytes) -> tuple[tuple[str, int], bytes]:
     tail = (sep + query) if sep else b""
     if raw == b"/websockify" or raw.startswith(b"/websockify/"):
         return VNC, path
+    if raw == b"/vnc/vnc_embed.html":
+        return VNC, b"/vnc.html" + tail
     if raw == b"/vnc" or raw.startswith(b"/vnc/"):
         stripped = raw[len(b"/vnc") :] or b"/"
         return VNC, stripped + tail
@@ -99,11 +101,87 @@ def _nodelay(sock: socket.socket) -> None:
         pass
 
 
+def _vnc_shell(header: bytes) -> bytes:
+    """The picture stays in a frame. The keyboard stays in the yellow bar, outside that frame."""
+    path = header.split(b"\r\n", 1)[0].split(b" ")[1]
+    query = path.split(b"?", 1)[1].decode("ascii", "ignore") if b"?" in path else ""
+    src = "/vnc/vnc_embed.html" + (("?" + query) if query else "")
+    src = src.replace("&", "&amp;").replace('"', "&quot;")
+    page = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion Power BI</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; }
+  iframe { position: fixed; top: 0; left: 0; width: 100%; height: calc(100% - 92px); border: 0; background: #000; }
+  #cra-type { position: fixed; left: 0; right: 0; bottom: 0; height: 92px; z-index: 2;
+    display: flex; align-items: center; padding: 10px 12px; box-sizing: border-box;
+    background: #f5c518; color: #111; font: 600 16px/1.2 sans-serif; }
+  #cra-type form { display: flex; gap: 10px; flex: 1; min-width: 0; align-items: center; }
+  #cra-type label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  #cra-type input { height: 46px; padding: 0 12px; font-size: 18px; border: 2px solid #111; border-radius: 6px; }
+  #cra-type button { height: 46px; padding: 0 18px; font-size: 18px; font-weight: 700;
+    background: #111; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+<iframe src="__SRC__" title="Power BI"></iframe>
+<div id="cra-type">
+  <form id="cra-type-form">
+    <label>
+      <span>Tape ici. L'image ne prend pas le clavier.</span>
+      <input id="cra-type-input" autocomplete="off" spellcheck="false" placeholder="Email, mot de passe ou code">
+    </label>
+    <button type="submit">Envoyer</button>
+  </form>
+</div>
+<script>
+(function () {
+  var form = document.getElementById("cra-type-form");
+  var input = document.getElementById("cra-type-input");
+  var note = form.querySelector("span");
+  input.addEventListener("keydown", function (event) { event.stopPropagation(); });
+  input.focus();
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var text = input.value;
+    if (!text.trim()) return;
+    var button = form.querySelector("button");
+    button.disabled = true;
+    fetch("/api/session/type", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text })
+    }).then(function (response) {
+      return response.text().then(function (raw) {
+        var payload = {};
+        try { payload = raw ? JSON.parse(raw) : {}; } catch (error) {}
+        if (!response.ok) throw new Error(payload.error || "Envoi impossible");
+        input.value = "";
+        note.textContent = "Envoy\\u00e9. Regarde l'image, puis tape la suite ici.";
+        input.focus();
+      });
+    }).catch(function (error) {
+      note.textContent = error.message || "Envoi impossible";
+      input.focus();
+    }).then(function () { button.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
+"""
+    return page.replace("__SRC__", src).encode("utf-8")
+
+
 def _reply(conn: socket.socket, status: str, body: bytes, content_type: str) -> None:
     head = (
         f"HTTP/1.1 {status}\r\n"
         f"Content-Type: {content_type}\r\n"
         f"Content-Length: {len(body)}\r\n"
+        "Cache-Control: no-store\r\n"
         "Connection: close\r\n"
         "\r\n"
     ).encode()
@@ -124,6 +202,10 @@ def _handle(client: socket.socket) -> None:
         raw = request[1].split(b"?", 1)[0] if len(request) > 1 else b"/"
         if raw in (b"/vnc/package.json", b"/package.json"):
             _reply(client, "200 OK", b'{"name":"novnc","version":"1.3.0"}\n', "application/json")
+            client.close()
+            return
+        if request[:1] == [b"GET"] and raw == b"/vnc/vnc.html":
+            _reply(client, "200 OK", _vnc_shell(header), "text/html; charset=utf-8")
             client.close()
             return
         target, head, upgrade = _rewrite(header)

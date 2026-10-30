@@ -527,15 +527,57 @@ def _wait_for_session(driver: webdriver.Chrome, timeout: float) -> str:
     return "unknown"
 
 
+_FIELD_SELECTOR = (
+    "input[name='loginfmt'], input[type='email'], input[type='password'], "
+    "input[name='passwd'], input[type='text'], input:not([type])"
+)
+_SUBMIT_LABELS = {"submit", "next", "suivant", "sign in", "se connecter", "verify", "vérifier"}
+
+
+def _ranked_fields(driver: webdriver.Chrome) -> list:
+    fields = []
+    for element in driver.find_elements(By.CSS_SELECTOR, _FIELD_SELECTOR):
+        try:
+            if not element.is_displayed() or not element.is_enabled():
+                continue
+        except WebDriverException:
+            continue
+        kind = (element.get_attribute("type") or "text").lower()
+        name = (element.get_attribute("name") or "").lower()
+        rank = 0 if kind in {"email", "password"} or name in {"loginfmt", "passwd"} else 1
+        fields.append((rank, element))
+    fields.sort(key=lambda item: item[0])
+    return [element for _, element in fields]
+
+
+def _find_sign_in_field(driver: webdriver.Chrome):
+    """The email or password box, including when Microsoft puts it in a frame."""
+    _focus_live_window(driver)
+    driver.switch_to.default_content()
+    found = _ranked_fields(driver)
+    if found:
+        return found[0]
+    for frame in driver.find_elements(By.CSS_SELECTOR, "iframe"):
+        try:
+            driver.switch_to.default_content()
+            driver.switch_to.frame(frame)
+            found = _ranked_fields(driver)
+            if found:
+                return found[0]
+        except WebDriverException:
+            continue
+    driver.switch_to.default_content()
+    return None
+
+
 def _click_visible_field(driver: webdriver.Chrome) -> bool:
-    fields = driver.find_elements(By.CSS_SELECTOR, "input[name='loginfmt'], input[type='email'], input[type='password'], input[name='passwd']")
-    visible = [el for el in fields if el.is_displayed()]
-    if not visible:
+    found = _ranked_fields(driver)
+    if not found:
         return False
-    active = driver.switch_to.active_element
-    if active in visible:
-        return True
-    visible[0].click()
+    try:
+        found[0].click()
+    except WebDriverException:
+        driver.execute_script("arguments[0].focus();", found[0])
     return True
 
 
@@ -562,21 +604,73 @@ def _focus_sign_in_field(driver: webdriver.Chrome) -> bool:
             return False
 
 
+def _write_field(driver: webdriver.Chrome, element, text: str) -> None:
+    try:
+        element.click()
+    except (ElementClickInterceptedException, ElementNotInteractableException, WebDriverException):
+        driver.execute_script("arguments[0].focus(); arguments[0].click();", element)
+    try:
+        element.clear()
+    except WebDriverException:
+        pass
+    try:
+        element.send_keys(text)
+    except WebDriverException:
+        pass
+    current = element.get_attribute("value") or ""
+    if text not in current:
+        driver.execute_script(
+            """
+            const el = arguments[0];
+            const value = arguments[1];
+            el.focus();
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+            el.dispatchEvent(new InputEvent("input", {bubbles: true, data: value, inputType: "insertText"}));
+            el.dispatchEvent(new Event("change", {bubbles: true}));
+            """,
+            element,
+            text,
+        )
+        current = element.get_attribute("value") or ""
+        kind = (element.get_attribute("type") or "").lower()
+        if kind != "password" and text not in current:
+            raise ValueError("Le texte n'est pas entré dans le champ. Réessaie.")
+
+
+def _click_submit(driver: webdriver.Chrome) -> bool:
+    for element in driver.find_elements(By.CSS_SELECTOR, "button, input[type='submit'], input[type='button']"):
+        try:
+            if not element.is_displayed() or not element.is_enabled():
+                continue
+            label = (element.text or element.get_attribute("value") or element.get_attribute("aria-label") or "").strip().lower()
+            if label in _SUBMIT_LABELS or element.get_attribute("id") == "idSIButton9":
+                element.click()
+                return True
+        except WebDriverException:
+            continue
+    return False
+
+
 def type_sign_in(text: str) -> None:
     """Type into the open Power BI sign-in. The remote picture does not receive the keyboard."""
     text = str(text).replace("\r", "").replace("\n", "")
     if not text.strip():
-        raise ValueError("Type the email, password, or code first")
+        raise ValueError("Écris d'abord l'email, le mot de passe ou le code")
     if len(text) > 200:
-        raise ValueError("That text is too long")
+        raise ValueError("Texte trop long")
     with _signin_lock:
         driver = _signin_driver
         if driver is None:
-            raise ValueError("The sign-in screen is not open")
-        _focus_sign_in_field(driver)
-        element = driver.switch_to.active_element
-        element.send_keys(text)
-        element.send_keys(Keys.ENTER)
+            raise ValueError("L'écran de connexion n'est pas ouvert. Retourne sur CRA Exports et clique Sign in to Power BI.")
+        element = _find_sign_in_field(driver)
+        if element is None:
+            raise ValueError("Le champ n'est pas encore là. Attends de voir Email, puis renvoie.")
+        _write_field(driver, element, text)
+        if not _click_submit(driver):
+            try:
+                element.send_keys(Keys.ENTER)
+            except WebDriverException:
+                pass
 
 
 def sign_in(timeout: float = 600) -> dict:
