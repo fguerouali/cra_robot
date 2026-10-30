@@ -529,9 +529,23 @@ def _wait_for_session(driver: webdriver.Chrome, timeout: float) -> str:
 
 _FIELD_SELECTOR = (
     "input[name='loginfmt'], input[type='email'], input[type='password'], "
-    "input[name='passwd'], input[type='text'], input:not([type])"
+    "input[name='passwd'], input[name='otc'], input[name='npotc'], "
+    "input[id='idTxtBx_SAOTCC_OTC'], input[autocomplete='one-time-code'], "
+    "input[type='tel'], input[type='text'], input:not([type])"
 )
+_EMAIL_SELECTORS = ("input[name='loginfmt']", "input[type='email']", "input[type='text']", "input:not([type])")
+_PASSWORD_SELECTOR = "input[type='password'], input[name='passwd']"
+_CODE_SELECTOR = "input[name='otc'], input[name='npotc'], input[id='idTxtBx_SAOTCC_OTC'], input[autocomplete='one-time-code'], input[type='tel']"
 _SUBMIT_LABELS = {"submit", "next", "suivant", "sign in", "se connecter", "verify", "vérifier"}
+_BAD_PASSWORD = (
+    "password is incorrect",
+    "that password is incorrect",
+    "account or password is incorrect",
+    "mot de passe est incorrect",
+    "mot de passe incorrect",
+)
+_STAY_SIGNED_IN = ("stay signed in", "rester connecté", "rester connecte")
+_signin_step = ""
 
 
 def _ranked_fields(driver: webdriver.Chrome) -> list:
@@ -544,7 +558,7 @@ def _ranked_fields(driver: webdriver.Chrome) -> list:
             continue
         kind = (element.get_attribute("type") or "text").lower()
         name = (element.get_attribute("name") or "").lower()
-        rank = 0 if kind in {"email", "password"} or name in {"loginfmt", "passwd"} else 1
+        rank = 0 if kind in {"email", "password", "tel"} or name in {"loginfmt", "passwd", "otc", "npotc"} else 1
         fields.append((rank, element))
     fields.sort(key=lambda item: item[0])
     return [element for _, element in fields]
@@ -638,7 +652,7 @@ def _write_field(driver: webdriver.Chrome, element, text: str) -> None:
 
 
 def _click_submit(driver: webdriver.Chrome) -> bool:
-    for element in driver.find_elements(By.CSS_SELECTOR, "button, input[type='submit'], input[type='button']"):
+    for element in driver.find_elements(By.CSS_SELECTOR, "button, input[type='submit'], input[type='button'], [role='button']"):
         try:
             if not element.is_displayed() or not element.is_enabled():
                 continue
@@ -673,30 +687,185 @@ def type_sign_in(text: str) -> None:
                 pass
 
 
-def sign_in(timeout: float = 600) -> dict:
-    """Open Power BI in a visible window and wait for the person to sign in; records the session like a check."""
+def sign_in_step() -> str:
+    return _signin_step
+
+
+def _set_step(step: str) -> None:
+    global _signin_step
+    _signin_step = step
+
+
+def _first_visible(driver: webdriver.Chrome, selector: str):
+    for element in driver.find_elements(By.CSS_SELECTOR, selector):
+        try:
+            if element.is_displayed() and element.is_enabled():
+                return element
+        except WebDriverException:
+            continue
+    return None
+
+
+def _in_frames(driver: webdriver.Chrome, selector: str):
+    driver.switch_to.default_content()
+    found = _first_visible(driver, selector)
+    if found is not None:
+        return found
+    for frame in driver.find_elements(By.CSS_SELECTOR, "iframe"):
+        try:
+            driver.switch_to.default_content()
+            driver.switch_to.frame(frame)
+            found = _first_visible(driver, selector)
+            if found is not None:
+                return found
+        except WebDriverException:
+            continue
+    driver.switch_to.default_content()
+    return None
+
+
+def _field_for(driver: webdriver.Chrome, kind: str):
+    _focus_live_window(driver)
+    if kind == "password":
+        return _in_frames(driver, _PASSWORD_SELECTOR)
+    if kind == "code":
+        return _in_frames(driver, _CODE_SELECTOR)
+    for selector in _EMAIL_SELECTORS:
+        found = _in_frames(driver, selector)
+        if found is not None:
+            return found
+    return None
+
+
+def _page_text(driver: webdriver.Chrome) -> str:
+    try:
+        _focus_live_window(driver)
+        driver.switch_to.default_content()
+        return driver.execute_script("return document.body ? document.body.innerText : ''") or ""
+    except WebDriverException:
+        return ""
+
+
+def _password_rejected(driver: webdriver.Chrome) -> bool:
+    texts = [_page_text(driver).lower()]
+    try:
+        for frame in driver.find_elements(By.CSS_SELECTOR, "iframe"):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(frame)
+                texts.append((driver.execute_script("return document.body ? document.body.innerText : ''") or "").lower())
+            except WebDriverException:
+                continue
+        driver.switch_to.default_content()
+    except WebDriverException:
+        pass
+    blob = "\n".join(texts)
+    return any(part in blob for part in _BAD_PASSWORD)
+
+
+def _accept_prompts(driver: webdriver.Chrome) -> bool:
+    if not any(part in _page_text(driver).lower() for part in _STAY_SIGNED_IN):
+        return False
+    driver.switch_to.default_content()
+    for element in driver.find_elements(By.CSS_SELECTOR, "button, input[type='submit'], [role='button']"):
+        try:
+            label = (element.text or element.get_attribute("value") or "").strip().lower()
+            if element.is_displayed() and element.is_enabled() and (element.get_attribute("id") == "idSIButton9" or label in {"yes", "oui"}):
+                element.click()
+                return True
+        except WebDriverException:
+            continue
+    return False
+
+
+def _submit_field(driver: webdriver.Chrome, element, text: str) -> None:
+    _write_field(driver, element, text)
+    if not _click_submit(driver):
+        try:
+            element.send_keys(Keys.ENTER)
+        except WebDriverException:
+            pass
+
+
+def _submit_when_ready(driver: webdriver.Chrome, kind: str, text: str, timeout: float) -> str:
+    """'filled' once the box was submitted, 'healthy' if Power BI opened, else ''."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _wait_for_session(driver, 1) == "healthy":
+            return "healthy"
+        with _signin_lock:
+            try:
+                element = _field_for(driver, kind)
+            except (WebDriverException, NoSuchWindowException):
+                element = None
+            if element is not None:
+                _submit_field(driver, element, text)
+                return "filled"
+        time.sleep(1)
+    return ""
+
+
+def sign_in(email: str = "", password: str = "", timeout: float = 600) -> dict:
+    """Open Power BI and type the email and password from the CRA page. The remote picture is not used."""
     global _signin_driver
+    email = str(email).strip()
+    password = str(password)
     driver = None
     try:
+        _set_step("opening")
         say("Opening Power BI")
         driver = _browser(headless=False)
         with _signin_lock:
             _signin_driver = driver
         driver.get(POWER_BI_HOME)
-        if _wait_for_session(driver, 20) != "healthy":
-            say("Sign in to Power BI on the screen that opened")
-            deadline = time.monotonic() + timeout
-            focused = False
-            while time.monotonic() < deadline and _wait_for_session(driver, 5) != "healthy":
-                if not focused:
-                    focused = _focus_sign_in_field(driver)
-                time.sleep(1)
-        if _wait_for_session(driver, 1) == "healthy":
+        if _wait_for_session(driver, 25) == "healthy":
             return save_session("healthy", "Power BI opens without asking to sign in.")
+        if "@" not in email or not password.strip():
+            return save_session("signed_out", "Enter the work email and the password on the CRA page.")
+        _set_step("email")
+        say("Entering the email")
+        entered = _submit_when_ready(driver, "email", email, 90)
+        if entered == "healthy":
+            return save_session("healthy", "Power BI opens without asking to sign in.")
+        if entered != "filled":
+            return save_session("signed_out", "The email box did not appear.")
+        _set_step("password")
+        say("Entering the password")
+        entered_password = False
+        password_by = time.monotonic() + 90
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if _wait_for_session(driver, 1) == "healthy":
+                return save_session("healthy", "Power BI opens without asking to sign in.")
+            with _signin_lock:
+                try:
+                    if entered_password and _password_rejected(driver):
+                        return save_session("signed_out", "The password was rejected. Type it again on this page.")
+                    if _accept_prompts(driver):
+                        _set_step("waiting")
+                        continue
+                    has_code = _field_for(driver, "code") is not None
+                    has_password = _field_for(driver, "password") is not None
+                    if has_password and not entered_password:
+                        element = _field_for(driver, "password")
+                        if element is not None:
+                            _submit_field(driver, element, password)
+                            entered_password = True
+                            _set_step("waiting")
+                            continue
+                    if has_code:
+                        _set_step("code")
+                        continue
+                except (WebDriverException, NoSuchWindowException):
+                    pass
+            if not entered_password and _signin_step != "code" and time.monotonic() > password_by:
+                return save_session("signed_out", "The password box did not appear. Check the email.")
+            time.sleep(1)
         return save_session("signed_out", f"Sign-in was not completed within {int(timeout // 60)} minutes.")
     except (WebDriverException, NoSuchWindowException):
         return save_session("signed_out", "The sign-in window closed before Power BI finished opening.")
     finally:
+        _set_step("")
         with _signin_lock:
             _signin_driver = None
         if driver is not None:

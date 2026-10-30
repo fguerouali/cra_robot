@@ -44,6 +44,7 @@ from main import (
     set_resource_excluded,
     storage_summary,
     type_sign_in,
+    sign_in_step,
     update_resource,
 )
 from workflow import DOWNLOADS, month_label
@@ -169,7 +170,7 @@ def _state() -> dict:
     return {
         "running": running,
         "logged_runs": _logged_runs(),
-        "session": {**session_status(), "checking": _is_checking(), "task": _session_task, "has_logs": SESSION_LOG.exists()},
+        "session": {**session_status(), "checking": _is_checking(), "task": _session_task, "step": sign_in_step(), "has_logs": SESSION_LOG.exists()},
         "current_run": current_run,
         "history": entries,
         "resources": config["resources"],
@@ -494,7 +495,7 @@ def _settings() -> dict:
     entries = history()
     return {
         "running": _is_running(),
-        "session": {**session_status(), "checking": _is_checking(), "task": _session_task},
+        "session": {**session_status(), "checking": _is_checking(), "task": _session_task, "step": sign_in_step()},
         "storage": storage_summary(),
         "signature": {**signature_status(), **get_config()["signature"]},
         "history": {"runs": len({entry.get("run_id") for entry in entries}), "entries": len(entries)},
@@ -508,13 +509,13 @@ def _signin_url() -> str:
     return os.getenv("SIGNIN_URL", "").strip()
 
 
-def _finish_sign_in() -> None:
+def _finish_sign_in(email: str, password: str) -> None:
     """Run the visible sign-in off the request so the browser tab is not tied to one long HTTP call."""
     global _checking, _session_task
     _log_begin(SESSION_LOG, fresh=True)
     log("Signing in to Power BI", "step")
     try:
-        outcome = sign_in()
+        outcome = sign_in(email, password)
         if outcome["status"] == "healthy":
             log("Online · exports can run without you", "ok")
         else:
@@ -533,6 +534,13 @@ def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
     """Session check, session cut-off and purges; all of them need the exporter to be idle."""
     global _checking, _session_task
     method = str(payload.get("method", ""))
+    email = ""
+    password = ""
+    if path == "/api/session/signin":
+        email = str(payload.get("email", "")).strip()
+        password = str(payload.get("password", ""))
+        if "@" not in email or len(email) > 200 or not password.strip() or len(password) > 200:
+            return 400, {"error": "Enter the work email and the password"}
     if path == "/api/session/cutoff":
         if method not in ("sign_out", "forget"):
             return 400, {"error": "Pick how to cut off the session"}
@@ -548,7 +556,7 @@ def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
             _checking = True
             _session_task = path.rsplit("/", 1)[-1]
     if path == "/api/session/signin":
-        threading.Thread(target=_finish_sign_in, name="sign-in", daemon=True).start()
+        threading.Thread(target=_finish_sign_in, args=(email, password), name="sign-in", daemon=True).start()
         return 200, _settings()
     elif path == "/api/session/cutoff":
         _log_begin(SESSION_LOG, fresh=True)

@@ -281,8 +281,8 @@
     #status-pill { min-width: 104px; justify-content: center; font-variant-numeric: tabular-nums; }
 
     .run-form { display: flex; align-items: center; gap: 8px; }
-    .signin-type { display: flex; gap: 8px; margin-top: 12px; }
-    .signin-type input { flex: 1; min-width: 0; }
+    .signin-creds, .signin-type { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .signin-creds input, .signin-type input { flex: 1; min-width: 160px; }
     .month-field {
       display: inline-flex; align-items: center; height: 40px; padding-left: 2px;
       border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-xs);
@@ -676,8 +676,13 @@
             </button>
           </form>
         </div>
+        <form class="signin-creds" id="signin-creds" hidden>
+          <input class="input" id="signin-email" type="email" autocomplete="username" spellcheck="false" placeholder="Email" aria-label="Email" required>
+          <input class="input" id="signin-password" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required>
+          <button class="btn btn-primary btn-sm" type="submit">Se connecter</button>
+        </form>
         <form class="signin-type" id="signin-type" hidden>
-          <input class="input" id="signin-text" type="text" autocomplete="off" spellcheck="false" placeholder="Email, mot de passe ou code" aria-label="Texte à envoyer à Power BI">
+          <input class="input" id="signin-text" type="text" autocomplete="one-time-code" spellcheck="false" placeholder="Code reçu" aria-label="Code reçu" inputmode="numeric">
           <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
         </form>
         <div class="console-foot">
@@ -687,7 +692,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Logs
           </button>
           <div class="status-actions" id="status-actions" hidden>
-            <button class="btn btn-secondary btn-xs" id="status-signin" type="button" data-signin hidden><svg class="pbi-mark" viewBox="0 0 1200 1600" aria-hidden="true"><defs><linearGradient id="pbi-tall" x1="558" y1="0" x2="1248" y2="1507" gradientUnits="userSpaceOnUse"><stop stop-color="#E6AD10"/><stop offset="1" stop-color="#C87E0E"/></linearGradient><linearGradient id="pbi-mid" x1="325" y1="400" x2="906" y2="1562" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D751"/><stop offset="1" stop-color="#E6AD10"/></linearGradient><linearGradient id="pbi-short" x1="0" y1="800" x2="320" y2="1582" gradientUnits="userSpaceOnUse"><stop stop-color="#F9E589"/><stop offset="1" stop-color="#F6D751"/></linearGradient></defs><path fill="url(#pbi-tall)" d="M1200 66.75v1466.5c0 36.86-29.89 66.75-66.75 66.75H716.75C679.89 1600 650 1570.11 650 1533.25V66.75C650 29.89 679.89 0 716.75 0h416.5c36.87 0 66.75 29.88 66.75 66.75z"/><path fill="url(#pbi-mid)" d="M875 466.67V1600H325V466.67C325 429.85 354.85 400 391.67 400h416.66c36.82 0 66.67 29.85 66.67 66.67z"/><path fill="url(#pbi-short)" d="M0 866.67v666.66c0 36.82 29.85 66.67 66.67 66.67H550V866.67C550 829.85 520.15 800 483.33 800H66.67C29.85 800 0 829.85 0 866.67z"/></svg>Sign in to Power BI</button>
+            <button class="btn btn-secondary btn-xs" id="status-signin" type="button" hidden><svg class="pbi-mark" viewBox="0 0 1200 1600" aria-hidden="true"><defs><linearGradient id="pbi-tall" x1="558" y1="0" x2="1248" y2="1507" gradientUnits="userSpaceOnUse"><stop stop-color="#E6AD10"/><stop offset="1" stop-color="#C87E0E"/></linearGradient><linearGradient id="pbi-mid" x1="325" y1="400" x2="906" y2="1562" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D751"/><stop offset="1" stop-color="#E6AD10"/></linearGradient><linearGradient id="pbi-short" x1="0" y1="800" x2="320" y2="1582" gradientUnits="userSpaceOnUse"><stop stop-color="#F9E589"/><stop offset="1" stop-color="#F6D751"/></linearGradient></defs><path fill="url(#pbi-tall)" d="M1200 66.75v1466.5c0 36.86-29.89 66.75-66.75 66.75H716.75C679.89 1600 650 1570.11 650 1533.25V66.75C650 29.89 679.89 0 716.75 0h416.5c36.87 0 66.75 29.88 66.75 66.75z"/><path fill="url(#pbi-mid)" d="M875 466.67V1600H325V466.67C325 429.85 354.85 400 391.67 400h416.66c36.82 0 66.67 29.85 66.67 66.67z"/><path fill="url(#pbi-short)" d="M0 866.67v666.66c0 36.82 29.85 66.67 66.67 66.67H550V866.67C550 829.85 520.15 800 483.33 800H66.67C29.85 800 0 829.85 0 866.67z"/></svg>Sign in to Power BI</button>
             <a class="btn btn-ghost btn-xs" id="status-screen" href="#" target="cra-signin" rel="noopener" hidden>Open sign-in screen</a>
             <button class="btn btn-secondary btn-xs" id="status-retry" type="button">Retry failed</button>
             <button class="btn btn-ghost btn-xs" id="status-dismiss" type="button" aria-label="Dismiss this alert" title="Hide this alert until the next run">
@@ -762,7 +767,7 @@
             </button>
             <span class="skel" id="session-logs-skel" style="width: 76px; height: 32px; border-radius: 8px" aria-hidden="true"></span>
             <span class="skel" id="session-signin-skel" style="width: 69px; height: 32px; border-radius: 8px" aria-hidden="true"></span>
-            <button class="btn btn-primary btn-sm" id="session-signin" type="button" data-signin hidden>Sign in</button>
+            <button class="btn btn-primary btn-sm" id="session-signin" type="button" hidden>Sign in</button>
             <a class="btn btn-ghost btn-sm" id="session-screen" href="#" target="cra-signin" rel="noopener" hidden>Open sign-in screen</a>
             <button class="btn btn-secondary btn-sm" id="session-check" type="button">Check session</button>
           </div>
@@ -1324,14 +1329,22 @@
         };
       } else if (signingIn() || loggedOut()) {
         const waiting = signingIn();
+        const step = ui.data?.session?.step || "";
+        const progress = {
+          opening: "Ouverture de Power BI…",
+          email: "Saisie de l'email…",
+          password: "Saisie du mot de passe…",
+          code: "Entre le code reçu ci-dessous, puis Envoyer.",
+          waiting: "Connexion à Power BI…",
+        };
         view = {
           state: waiting ? "running" : "logged-out",
           icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
-          title: waiting ? "Waiting for you to sign in" : "Power BI session is logged out",
-          sub: waiting ? "Type in the box below. The sign-in picture does not take the keyboard." : "Sign in before running exports",
+          title: waiting ? "Connexion à Power BI" : "Saisis l'email et le mot de passe ici",
+          sub: waiting ? (progress[step] || "Connexion à Power BI…") : "Sur cette page. Pas dans l'image.",
           steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
           signin: !waiting,
-          screen: waiting && Boolean(signinUrl()),
+          code: waiting && step === "code",
           dismiss: false,
         };
       } else if (failures.length && alertKey !== ui.dismissedAlert) {
@@ -1383,12 +1396,12 @@
       $("#status-sub").title = view.sub;
 
       const retryNames = view.retry?.names || [];
-      $("#status-actions").hidden = !view.dismiss && !view.signin && !view.screen;
-      $("#signin-type").hidden = !view.screen;
-      $("#status-signin").hidden = !view.signin;
+      $("#status-actions").hidden = !view.dismiss;
+      $("#signin-creds").hidden = !view.signin;
+      $("#signin-type").hidden = !view.code;
+      $("#status-signin").hidden = true;
       const screen = $("#status-screen");
-      screen.hidden = !view.screen;
-      if (view.screen) screen.href = signinUrl();
+      screen.hidden = true;
       $("#status-dismiss").hidden = !view.dismiss;
       ui.logsRun = view.state === "running" ? run?.run_id || "" : view.dismiss ? runId : "";
       renderLogsButtons();
@@ -1816,9 +1829,16 @@
       const health = $("#session-health");
       const state = checking ? "checking" : session.status || "unknown";
       health.className = `health is-${state}`;
-      health.textContent = waitingSignIn ? "Waiting for sign-in…" : cuttingOff ? "Logging out…"
+      health.textContent = waitingSignIn ? "Connexion…" : cuttingOff ? "Logging out…"
         : { checking: "Checking…", healthy: "Online", signed_out: "Logged out", unknown: "Not checked" }[state] || "Unknown";
-      $("#session-detail").textContent = waitingSignIn ? "Sign in to Power BI on the screen that opened"
+      const progress = {
+        opening: "Opening Power BI",
+        email: "Entering the email",
+        password: "Entering the password",
+        code: "Enter the verification code on the Exports page",
+        waiting: "Finishing sign-in",
+      };
+      $("#session-detail").textContent = waitingSignIn ? (progress[session.step] || "Signing in from the Exports page")
         : cuttingOff ? "Ending the saved sign-in"
         : checking ? "Checking your Power BI session" : session.detail || "Run a check to find out";
       const lastOk = [...(ui.data?.history || [])].reverse().find((e) => e.status === "ok");
@@ -1844,9 +1864,7 @@
       $("#session-logs-skel")?.remove();
       if (!signInButton.classList.contains("is-loading")) signInButton.disabled = locked;
       const screen = $("#session-screen");
-      const screenUrl = signinUrl();
-      screen.hidden = !(waitingSignIn && screenUrl);
-      if (screenUrl) screen.href = screenUrl;
+      screen.hidden = true;
       const blockedReason = {
         sign_out: !session.has_profile ? "Nothing to log out of: there is no saved sign-in on the server."
           : session.status === "signed_out" ? "Power BI is already logged out." : "",
@@ -1998,36 +2016,22 @@
       refresh();
     });
 
-    $("#signin-type").addEventListener("submit", async (event) => {
+    $("#signin-creds").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const input = $("#signin-text");
-      const text = input.value;
-      if (!text.trim()) return;
+      const email = $("#signin-email").value.trim();
+      const password = $("#signin-password").value;
+      if (!email || !password) return;
       const button = event.target.querySelector("button");
-      try {
-        await withBusy(button, "Sending…", () => post("/api/session/type", { text }));
-        input.value = "";
-        input.focus();
-        toast("Sent to Power BI");
-      } catch (error) {
-        toast(error.message, "error");
-      }
-    });
-
-    document.addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-signin]");
-      if (!button || button.disabled) return;
-      openSignInScreen();
       ui.signingIn = true;
       renderStatus();
       renderHeader();
       renderSettings();
       try {
-        await post("/api/session/signin", {});
+        await withBusy(button, "Connexion…", () => post("/api/session/signin", { email, password }));
+        $("#signin-password").value = "";
       } catch (error) {
         toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
         ui.signingIn = false;
-        closeSignInScreen();
         await refresh();
         renderSettings();
         return;
@@ -2045,13 +2049,33 @@
           if (session.checking && session.task === "signin") continue;
           online = session.status === "healthy";
           break;
-        } catch { /* the sign-in screen stays open while the server catches up */ }
+        } catch { /* keep the form state until the server answers */ }
       }
-      toast(online ? "Signed in · Power BI session is online" : "Still logged out — sign-in was not completed", online ? "success" : "error");
+      toast(online ? "Connecté · la session Power BI est en ligne" : "Toujours déconnecté — la connexion n'a pas abouti", online ? "success" : "error");
       ui.signingIn = false;
-      closeSignInScreen();
       await refresh();
       renderSettings();
+    });
+
+    $("#session-signin").addEventListener("click", () => {
+      if (location.hash) location.hash = "";
+      $("#signin-email").focus();
+    });
+
+    $("#signin-type").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = $("#signin-text");
+      const text = input.value;
+      if (!text.trim()) return;
+      const button = event.target.querySelector("button");
+      try {
+        await withBusy(button, "Sending…", () => post("/api/session/type", { text }));
+        input.value = "";
+        input.focus();
+        toast("Sent to Power BI");
+      } catch (error) {
+        toast(error.message, "error");
+      }
     });
 
     $("#cutoff-toggle").addEventListener("click", () => {
