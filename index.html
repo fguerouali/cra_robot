@@ -1328,23 +1328,16 @@
           dismiss: false,
         };
       } else if (signingIn() || loggedOut()) {
-        const waiting = signingIn();
-        const step = ui.data?.session?.step || "";
-        const progress = {
-          opening: "Ouverture de Power BI…",
-          email: "Saisie de l'email…",
-          password: "Saisie du mot de passe…",
-          code: "Entre le code reçu ci-dessous, puis Envoyer.",
-          waiting: "Connexion à Power BI…",
-        };
         view = {
           state: waiting ? "running" : "logged-out",
           icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
-          title: waiting ? "Connexion à Power BI" : "Saisis l'email et le mot de passe ici",
-          sub: waiting ? (progress[step] || "Connexion à Power BI…") : "Sur cette page. Pas dans l'image.",
+          title: waiting ? "Connexion à Power BI" : "Power BI est déconnecté",
+          sub: waiting
+            ? "Dans la fenêtre : clique et tape, y compris pour l'Authenticator."
+            : "Ouvre l'écran et fais toute la connexion là-bas, Authenticator compris.",
           steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
           signin: !waiting,
-          code: waiting && step === "code",
+          screen: waiting && Boolean(signinUrl()),
           dismiss: false,
         };
       } else if (failures.length && alertKey !== ui.dismissedAlert) {
@@ -1396,12 +1389,13 @@
       $("#status-sub").title = view.sub;
 
       const retryNames = view.retry?.names || [];
-      $("#status-actions").hidden = !view.dismiss;
-      $("#signin-creds").hidden = !view.signin;
-      $("#signin-type").hidden = !view.code;
-      $("#status-signin").hidden = true;
+      $("#status-actions").hidden = !view.dismiss && !view.signin && !view.screen;
+      $("#signin-creds").hidden = true;
+      $("#signin-type").hidden = true;
+      $("#status-signin").hidden = !view.signin;
       const screen = $("#status-screen");
-      screen.hidden = true;
+      screen.hidden = !view.screen;
+      if (view.screen) screen.href = signinUrl();
       $("#status-dismiss").hidden = !view.dismiss;
       ui.logsRun = view.state === "running" ? run?.run_id || "" : view.dismiss ? runId : "";
       renderLogsButtons();
@@ -1831,14 +1825,7 @@
       health.className = `health is-${state}`;
       health.textContent = waitingSignIn ? "Connexion…" : cuttingOff ? "Logging out…"
         : { checking: "Checking…", healthy: "Online", signed_out: "Logged out", unknown: "Not checked" }[state] || "Unknown";
-      const progress = {
-        opening: "Opening Power BI",
-        email: "Entering the email",
-        password: "Entering the password",
-        code: "Enter the verification code on the Exports page",
-        waiting: "Finishing sign-in",
-      };
-      $("#session-detail").textContent = waitingSignIn ? (progress[session.step] || "Signing in from the Exports page")
+      $("#session-detail").textContent = waitingSignIn ? "Finish sign-in in the Power BI window, including Authenticator"
         : cuttingOff ? "Ending the saved sign-in"
         : checking ? "Checking your Power BI session" : session.detail || "Run a check to find out";
       const lastOk = [...(ui.data?.history || [])].reverse().find((e) => e.status === "ok");
@@ -1864,7 +1851,9 @@
       $("#session-logs-skel")?.remove();
       if (!signInButton.classList.contains("is-loading")) signInButton.disabled = locked;
       const screen = $("#session-screen");
-      screen.hidden = true;
+      const screenUrl = signinUrl();
+      screen.hidden = !(waitingSignIn && screenUrl);
+      if (screenUrl) screen.href = screenUrl;
       const blockedReason = {
         sign_out: !session.has_profile ? "Nothing to log out of: there is no saved sign-in on the server."
           : session.status === "signed_out" ? "Power BI is already logged out." : "",
@@ -2016,22 +2005,18 @@
       refresh();
     });
 
-    $("#signin-creds").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const email = $("#signin-email").value.trim();
-      const password = $("#signin-password").value;
-      if (!email || !password) return;
-      const button = event.target.querySelector("button");
+    async function beginSignIn(button) {
+      openSignInScreen();
       ui.signingIn = true;
       renderStatus();
       renderHeader();
       renderSettings();
       try {
-        await withBusy(button, "Connexion…", () => post("/api/session/signin", { email, password }));
-        $("#signin-password").value = "";
+        await withBusy(button, "Ouverture…", () => post("/api/session/signin", {}));
       } catch (error) {
         toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
         ui.signingIn = false;
+        closeSignInScreen();
         await refresh();
         renderSettings();
         return;
@@ -2049,18 +2034,17 @@
           if (session.checking && session.task === "signin") continue;
           online = session.status === "healthy";
           break;
-        } catch { /* keep the form state until the server answers */ }
+        } catch { /* the Power BI window stays open while the server catches up */ }
       }
       toast(online ? "Connecté · la session Power BI est en ligne" : "Toujours déconnecté — la connexion n'a pas abouti", online ? "success" : "error");
       ui.signingIn = false;
+      closeSignInScreen();
       await refresh();
       renderSettings();
-    });
+    }
 
-    $("#session-signin").addEventListener("click", () => {
-      if (location.hash) location.hash = "";
-      $("#signin-email").focus();
-    });
+    $("#status-signin").addEventListener("click", () => beginSignIn($("#status-signin")));
+    $("#session-signin").addEventListener("click", () => beginSignIn($("#session-signin")));
 
     $("#signin-type").addEventListener("submit", async (event) => {
       event.preventDefault();

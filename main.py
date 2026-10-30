@@ -805,62 +805,91 @@ def _submit_when_ready(driver: webdriver.Chrome, kind: str, text: str, timeout: 
     return ""
 
 
+def point_sign_in(x: float, y: float) -> None:
+    """Click where the person clicked on the sign-in picture. The remote desktop does not receive the pointer."""
+    with _signin_lock:
+        driver = _signin_driver
+        if driver is None:
+            raise ValueError("L'écran de connexion n'est pas encore ouvert")
+        try:
+            vx, vy = _picture_to_page(driver, float(x), float(y))
+            for event_type, buttons, clicks in (("mouseMoved", 0, 0), ("mousePressed", 1, 1), ("mouseReleased", 0, 1)):
+                driver.execute_cdp_cmd(
+                    "Input.dispatchMouseEvent",
+                    {"type": event_type, "x": vx, "y": vy, "button": "left", "buttons": buttons, "clickCount": clicks},
+                )
+        except (WebDriverException, TypeError, ValueError) as exc:
+            if isinstance(exc, ValueError) and "écran" in str(exc):
+                raise
+            raise ValueError("L'écran ne répond pas encore") from exc
+
+
+def key_sign_in(key: str, code: str, key_code: int, down: bool, text: str) -> None:
+    """Type into Power BI, including an Authenticator code. One key at a time."""
+    key = str(key)[:20]
+    code = str(code)[:40]
+    text = str(text)[:8]
+    if not key and not text:
+        return
+    with _signin_lock:
+        driver = _signin_driver
+        if driver is None:
+            raise ValueError("L'écran de connexion n'est pas encore ouvert")
+        event = {
+            "type": "keyDown" if down else "keyUp",
+            "key": key,
+            "code": code,
+            "windowsVirtualKeyCode": int(key_code or 0),
+            "nativeVirtualKeyCode": int(key_code or 0),
+        }
+        if down and text:
+            event["text"] = text
+            event["unmodifiedText"] = text
+        elif down and key == "Enter":
+            event["text"] = "\r"
+            event["unmodifiedText"] = "\r"
+        try:
+            driver.execute_cdp_cmd("Input.dispatchKeyEvent", event)
+        except (WebDriverException, TypeError, ValueError) as exc:
+            raise ValueError("L'écran ne répond pas encore") from exc
+
+
+def _picture_to_page(driver: webdriver.Chrome, x: float, y: float) -> tuple[float, float]:
+    """Framebuffer pixels from the picture, as coordinates inside the web page."""
+    metrics = driver.execute_script(
+        """
+        return {
+          screenX: window.screenX,
+          screenY: window.screenY,
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight
+        };
+        """
+    )
+    return x - float(metrics["screenX"]), y - float(metrics["screenY"])
+
+
 def sign_in(email: str = "", password: str = "", timeout: float = 600) -> dict:
-    """Open Power BI and type the email and password from the CRA page. The remote picture is not used."""
+    """Open Power BI and leave it on screen so the person can finish Microsoft Authenticator."""
     global _signin_driver
-    email = str(email).strip()
-    password = str(password)
     driver = None
     try:
-        _set_step("opening")
+        _set_step("screen")
         say("Opening Power BI")
         driver = _browser(headless=False)
         with _signin_lock:
             _signin_driver = driver
         driver.get(POWER_BI_HOME)
-        if _wait_for_session(driver, 25) == "healthy":
-            return save_session("healthy", "Power BI opens without asking to sign in.")
-        if "@" not in email or not password.strip():
-            return save_session("signed_out", "Enter the work email and the password on the CRA page.")
-        _set_step("email")
-        say("Entering the email")
-        entered = _submit_when_ready(driver, "email", email, 90)
-        if entered == "healthy":
-            return save_session("healthy", "Power BI opens without asking to sign in.")
-        if entered != "filled":
-            return save_session("signed_out", "The email box did not appear.")
-        _set_step("password")
-        say("Entering the password")
-        entered_password = False
-        password_by = time.monotonic() + 90
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if _wait_for_session(driver, 1) == "healthy":
+            if _wait_for_session(driver, 2) == "healthy":
                 return save_session("healthy", "Power BI opens without asking to sign in.")
             with _signin_lock:
                 try:
-                    if entered_password and _password_rejected(driver):
-                        return save_session("signed_out", "The password was rejected. Type it again on this page.")
-                    if _accept_prompts(driver):
-                        _set_step("waiting")
-                        continue
-                    has_code = _field_for(driver, "code") is not None
-                    has_password = _field_for(driver, "password") is not None
-                    if has_password and not entered_password:
-                        element = _field_for(driver, "password")
-                        if element is not None:
-                            _submit_field(driver, element, password)
-                            entered_password = True
-                            _set_step("waiting")
-                            continue
-                    if has_code:
-                        _set_step("code")
-                        continue
+                    _accept_prompts(driver)
                 except (WebDriverException, NoSuchWindowException):
                     pass
-            if not entered_password and _signin_step != "code" and time.monotonic() > password_by:
-                return save_session("signed_out", "The password box did not appear. Check the email.")
-            time.sleep(1)
+            time.sleep(0.5)
         return save_session("signed_out", f"Sign-in was not completed within {int(timeout // 60)} minutes.")
     except (WebDriverException, NoSuchWindowException):
         return save_session("signed_out", "The sign-in window closed before Power BI finished opening.")

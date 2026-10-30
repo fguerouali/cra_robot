@@ -102,7 +102,7 @@ def _nodelay(sock: socket.socket) -> None:
 
 
 def _vnc_shell(header: bytes) -> bytes:
-    """The picture stays in a frame. The keyboard stays in the yellow bar, outside that frame."""
+    """The picture is Power BI. Clicks and keys on it are forwarded into Chrome, so Authenticator can be used."""
     path = header.split(b"\r\n", 1)[0].split(b" ")[1]
     query = path.split(b"?", 1)[1].decode("ascii", "ignore") if b"?" in path else ""
     src = "/vnc/vnc_embed.html" + (("?" + query) if query else "")
@@ -114,60 +114,73 @@ def _vnc_shell(header: bytes) -> bytes:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connexion Power BI</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #111; }
-  iframe { position: fixed; top: 0; left: 0; width: 100%; height: calc(100% - 92px); border: 0; background: #000; }
-  #cra-type { position: fixed; left: 0; right: 0; bottom: 0; height: 92px; z-index: 2;
-    display: flex; align-items: center; padding: 10px 12px; box-sizing: border-box;
-    background: #f5c518; color: #111; font: 600 16px/1.2 sans-serif; }
-  #cra-type form { display: flex; gap: 10px; flex: 1; min-width: 0; align-items: center; }
-  #cra-type label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-  #cra-type input { height: 46px; padding: 0 12px; font-size: 18px; border: 2px solid #111; border-radius: 6px; }
-  #cra-type button { height: 46px; padding: 0 18px; font-size: 18px; font-weight: 700;
-    background: #111; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+  html, body { margin: 0; height: 100%; background: #111; color: #111; }
+  #hint { position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 4; margin: 0;
+    display: flex; align-items: center; padding: 0 12px; box-sizing: border-box;
+    background: #f5c518; font: 600 14px/1.2 sans-serif; }
+  iframe, #pad { position: fixed; top: 36px; left: 0; width: 100%; height: calc(100% - 36px); border: 0; background: #000; }
+  iframe { pointer-events: none; }
+  #pad { z-index: 3; background: transparent; outline: none; cursor: default; }
 </style>
 </head>
 <body>
+<p id="hint">Clique dans l'image et tape au clavier. L'Authenticator se fait ici.</p>
 <iframe src="__SRC__" title="Power BI"></iframe>
-<div id="cra-type">
-  <form id="cra-type-form">
-    <label>
-      <span>Tape ici. L'image ne prend pas le clavier.</span>
-      <input id="cra-type-input" autocomplete="off" spellcheck="false" placeholder="Email, mot de passe ou code">
-    </label>
-    <button type="submit">Envoyer</button>
-  </form>
-</div>
+<div id="pad" tabindex="0"></div>
 <script>
 (function () {
-  var form = document.getElementById("cra-type-form");
-  var input = document.getElementById("cra-type-input");
-  var note = form.querySelector("span");
-  input.addEventListener("keydown", function (event) { event.stopPropagation(); });
-  input.focus();
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
-    var text = input.value;
-    if (!text.trim()) return;
-    var button = form.querySelector("button");
-    button.disabled = true;
-    fetch("/api/session/type", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text })
-    }).then(function (response) {
-      return response.text().then(function (raw) {
-        var payload = {};
-        try { payload = raw ? JSON.parse(raw) : {}; } catch (error) {}
-        if (!response.ok) throw new Error(payload.error || "Envoi impossible");
-        input.value = "";
-        note.textContent = "Envoy\\u00e9. Regarde l'image, puis tape la suite ici.";
-        input.focus();
+  var frame = document.querySelector("iframe");
+  var pad = document.getElementById("pad");
+  var hint = document.getElementById("hint");
+  var chain = Promise.resolve();
+  function send(body) {
+    chain = chain.then(function () {
+      return fetch("/api/session/input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      }).then(function (response) {
+        if (!response.ok) hint.textContent = "Attends que Power BI soit affiché, puis réessaie.";
       });
-    }).catch(function (error) {
-      note.textContent = error.message || "Envoi impossible";
-      input.focus();
-    }).then(function () { button.disabled = false; });
+    }).catch(function () {
+      hint.textContent = "Attends que Power BI soit affiché, puis réessaie.";
+    });
+  }
+  function picturePoint(event) {
+    var doc = frame.contentDocument;
+    var canvases = doc ? doc.querySelectorAll("canvas") : [];
+    var canvas = null;
+    for (var i = 0; i < canvases.length; i++) {
+      var candidate = canvases[i];
+      if (!canvas || candidate.width * candidate.height > canvas.width * canvas.height) canvas = candidate;
+    }
+    if (!canvas || !canvas.width || !canvas.height) return null;
+    var shown = canvas.getBoundingClientRect();
+    var frameBox = frame.getBoundingClientRect();
+    var x = (event.clientX - frameBox.left - shown.left) * (canvas.width / shown.width);
+    var y = (event.clientY - frameBox.top - shown.top) * (canvas.height / shown.height);
+    if (x < 0 || y < 0 || x > canvas.width || y > canvas.height) return null;
+    return { x: x, y: y };
+  }
+  pad.addEventListener("pointerdown", function (event) {
+    pad.focus();
+    var point = picturePoint(event);
+    if (!point) return;
+    send({ kind: "click", x: point.x, y: point.y });
   });
+  function sendKey(event, down) {
+    var text = event.key && event.key.length === 1 ? event.key : "";
+    send({ kind: "key", key: event.key || "", code: event.code || "", keyCode: event.keyCode || 0, down: down, text: text });
+  }
+  pad.addEventListener("keydown", function (event) {
+    event.preventDefault();
+    sendKey(event, true);
+  });
+  pad.addEventListener("keyup", function (event) {
+    event.preventDefault();
+    sendKey(event, false);
+  });
+  pad.focus();
 })();
 </script>
 </body>

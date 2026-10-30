@@ -44,6 +44,8 @@ from main import (
     set_resource_excluded,
     storage_summary,
     type_sign_in,
+    point_sign_in,
+    key_sign_in,
     sign_in_step,
     update_resource,
 )
@@ -425,6 +427,22 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._send(202, "application/json", b'{"running": true}')
                 return
+            if path == "/api/session/input":
+                kind = str(payload.get("kind", ""))
+                if kind == "click":
+                    point_sign_in(float(payload.get("x", 0)), float(payload.get("y", 0)))
+                elif kind == "key":
+                    key_sign_in(
+                        str(payload.get("key", "")),
+                        str(payload.get("code", "")),
+                        int(payload.get("keyCode", 0) or 0),
+                        bool(payload.get("down")),
+                        str(payload.get("text", "")),
+                    )
+                else:
+                    raise ValueError("Unknown input")
+                self._send(200, "application/json", b"{}")
+                return
             if path == "/api/session/type":
                 type_sign_in(str(payload.get("text", "")))
                 self._send(200, "application/json", b"{}")
@@ -509,13 +527,13 @@ def _signin_url() -> str:
     return os.getenv("SIGNIN_URL", "").strip()
 
 
-def _finish_sign_in(email: str, password: str) -> None:
+def _finish_sign_in() -> None:
     """Run the visible sign-in off the request so the browser tab is not tied to one long HTTP call."""
     global _checking, _session_task
     _log_begin(SESSION_LOG, fresh=True)
     log("Signing in to Power BI", "step")
     try:
-        outcome = sign_in(email, password)
+        outcome = sign_in()
         if outcome["status"] == "healthy":
             log("Online · exports can run without you", "ok")
         else:
@@ -534,13 +552,6 @@ def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
     """Session check, session cut-off and purges; all of them need the exporter to be idle."""
     global _checking, _session_task
     method = str(payload.get("method", ""))
-    email = ""
-    password = ""
-    if path == "/api/session/signin":
-        email = str(payload.get("email", "")).strip()
-        password = str(payload.get("password", ""))
-        if "@" not in email or len(email) > 200 or not password.strip() or len(password) > 200:
-            return 400, {"error": "Enter the work email and the password"}
     if path == "/api/session/cutoff":
         if method not in ("sign_out", "forget"):
             return 400, {"error": "Pick how to cut off the session"}
@@ -556,7 +567,7 @@ def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
             _checking = True
             _session_task = path.rsplit("/", 1)[-1]
     if path == "/api/session/signin":
-        threading.Thread(target=_finish_sign_in, args=(email, password), name="sign-in", daemon=True).start()
+        threading.Thread(target=_finish_sign_in, name="sign-in", daemon=True).start()
         return 200, _settings()
     elif path == "/api/session/cutoff":
         _log_begin(SESSION_LOG, fresh=True)
