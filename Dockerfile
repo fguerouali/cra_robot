@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     DISPLAY=:99 \
     APP_HOST=0.0.0.0 \
-    APP_PORT=8765 \
+    APP_PORT=8080 \
     APP_DATA=/app/data \
     IN_CONTAINER=1 \
     CHROME_BIN=/usr/bin/chromium \
@@ -41,7 +41,7 @@ RUN chmod +x /entrypoint.sh \
 
 USER app
 VOLUME ["/app/data"]
-EXPOSE 8765 6080
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/state', timeout=4)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/state', timeout=4)"
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
