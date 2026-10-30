@@ -3,13 +3,13 @@ FROM python:3.9-slim-bookworm
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     DISPLAY=:99 \
-    APP_HOST=0.0.0.0 \
-    APP_PORT=8080 \
+    APP_HOST=127.0.0.1 \
+    APP_PORT=8765 \
     APP_DATA=/app/data \
     IN_CONTAINER=1 \
     CHROME_BIN=/usr/bin/chromium \
     CHROMEDRIVER=/usr/bin/chromedriver \
-    SIGNIN_URL=http://{host}:6080/vnc.html?autoconnect=1&resize=scale
+    SIGNIN_URL={origin}/vnc/vnc.html?autoconnect=1&resize=scale
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium \
@@ -33,6 +33,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY paths.py main.py workflow.py signature.py server.py index.html config.json ./
 COPY fonts ./fonts
 COPY docker/entrypoint.sh /entrypoint.sh
+COPY docker/proxy.py /app/docker/proxy.py
 RUN chmod +x /entrypoint.sh \
  && useradd --create-home --uid 1000 app \
  && mkdir -p /app/data /tmp/.X11-unix \
@@ -43,5 +44,5 @@ USER app
 VOLUME ["/app/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/state', timeout=4)"
+  CMD python -c "import os,urllib.request; p=os.environ.get('PORT','8080'); urllib.request.urlopen('http://127.0.0.1:%s/api/state'%p, timeout=4)"
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

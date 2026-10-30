@@ -1156,7 +1156,7 @@
       return session.status === "signed_out" || session.has_profile === false;
     };
     const signingIn = () => Boolean(ui.signingIn || (ui.data?.session?.checking && ui.data.session.task === "signin"));
-    const signinUrl = () => String((ui.settings && ui.settings.signin_url) || (ui.data && ui.data.signin_url) || "").replaceAll("{host}", location.hostname);
+    const signinUrl = () => String((ui.settings && ui.settings.signin_url) || (ui.data && ui.data.signin_url) || "").replaceAll("{host}", location.hostname).replaceAll("{origin}", location.origin);
     const openSignInScreen = () => {
       const url = signinUrl();
       if (!url) return;

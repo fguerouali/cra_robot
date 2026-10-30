@@ -26,9 +26,9 @@ openbox >/dev/null 2>&1 &
 x11vnc -display "${DISPLAY:-:99}" -localhost -forever -shared -nopw -quiet -xkb -noxdamage -wait 10 &
 websockify --web=/usr/share/novnc 127.0.0.1:6080 localhost:5900 >/dev/null 2>&1 &
 
-# Render forwards public traffic to $PORT. 6080 is the sign-in screen, kept on localhost.
-if [ -n "${PORT:-}" ] && [ "$PORT" != "6080" ]; then
-  export APP_PORT="$PORT"
-fi
+# The app and the sign-in screen stay on localhost. proxy.py is the only public port.
+export APP_HOST=127.0.0.1
+export APP_PORT=8765
+python -u /app/docker/proxy.py &
 
 exec python -u server.py

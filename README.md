@@ -21,7 +21,7 @@ docker compose up -d --build
 
 Open http://127.0.0.1:8080. When the session is logged out, **Sign in to Power BI** opens the sign-in screen. Finish Microsoft sign-in there (including any phone prompt). The app notices on its own and closes the screen.
 
-On a remote host, keep both published ports on localhost and put them behind the same login as the app. Change `SIGNIN_URL` if the sign-in screen is not on port 6080 of the same host. Exported files, the saved sign-in, the signature, and run history live in the `cra-data` volume.
+On a remote host, only port 8080 is published. The sign-in screen is served at `/vnc/` on that same address. Exported files, the saved sign-in, the signature, and run history live in the `cra-data` volume.
 
 The resource list is stored in `config.json` and survives restarts. Add, edit, or remove names in the UI; duplicates are rejected. Each resource has an **exclude** flag: excluded resources stay in the list but are skipped on runs. **Run** executes the workflow sequentially for each active resource — one failure does not stop the rest — and progress shows which resource is running.
 
