@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -23,11 +24,14 @@ from selenium.common.exceptions import (
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.selenium_manager import SeleniumManager
 
 from paths import CONFIG, DOWNLOADS, HISTORY, PROFILE, SESSION_FILE, SHOTS
 from workflow import SIGNED_IN_TEXT, SignInRequired, debug, say, sign_in_requested, workflow
 
+_signin_lock = threading.RLock()
+_signin_driver: webdriver.Chrome | None = None
 POWER_BI_HOME = "https://app.powerbi.com/home"
 SIGN_OUT_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/logout"
 SIGN_IN_ORIGINS = (
@@ -509,43 +513,81 @@ def _wait_for_session(driver: webdriver.Chrome, timeout: float) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            _focus_live_window(driver)
-            if sign_in_requested(driver):
-                return "signed_out"
-            url = driver.current_url or ""
-            body = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
-            if SIGNED_IN_TEXT in body or (url.startswith("https://app.powerbi.com/") and "singleSignOn" not in url):
-                return "healthy"
+            with _signin_lock:
+                _focus_live_window(driver)
+                if sign_in_requested(driver):
+                    return "signed_out"
+                url = driver.current_url or ""
+                body = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
+                if SIGNED_IN_TEXT in body or (url.startswith("https://app.powerbi.com/") and "singleSignOn" not in url):
+                    return "healthy"
         except (WebDriverException, NoSuchWindowException):
             return "unknown"
         time.sleep(1)
     return "unknown"
 
 
-def _focus_sign_in_field(driver: webdriver.Chrome) -> bool:
-    """Put the cursor in the Microsoft email or password box. Clicks on the remote screen often miss it."""
-    try:
-        _focus_live_window(driver)
-        driver.maximize_window()
-        fields = driver.find_elements(By.CSS_SELECTOR, "input[name='loginfmt'], input[type='email'], input[type='password']")
-        visible = [el for el in fields if el.is_displayed()]
-        if not visible:
-            return False
-        active = driver.switch_to.active_element
-        if active in visible:
-            return True
-        visible[0].click()
-        return True
-    except WebDriverException:
+def _click_visible_field(driver: webdriver.Chrome) -> bool:
+    fields = driver.find_elements(By.CSS_SELECTOR, "input[name='loginfmt'], input[type='email'], input[type='password'], input[name='passwd']")
+    visible = [el for el in fields if el.is_displayed()]
+    if not visible:
         return False
+    active = driver.switch_to.active_element
+    if active in visible:
+        return True
+    visible[0].click()
+    return True
+
+
+def _focus_sign_in_field(driver: webdriver.Chrome) -> bool:
+    """Put the cursor in the Microsoft email or password box, including when it sits in a frame."""
+    with _signin_lock:
+        try:
+            _focus_live_window(driver)
+            driver.maximize_window()
+            driver.switch_to.default_content()
+            if _click_visible_field(driver):
+                return True
+            for frame in driver.find_elements(By.CSS_SELECTOR, "iframe"):
+                try:
+                    driver.switch_to.default_content()
+                    driver.switch_to.frame(frame)
+                    if _click_visible_field(driver):
+                        return True
+                except WebDriverException:
+                    continue
+            driver.switch_to.default_content()
+            return False
+        except WebDriverException:
+            return False
+
+
+def type_sign_in(text: str) -> None:
+    """Type into the open Power BI sign-in. The remote picture does not receive the keyboard."""
+    text = str(text).replace("\r", "").replace("\n", "")
+    if not text.strip():
+        raise ValueError("Type the email, password, or code first")
+    if len(text) > 200:
+        raise ValueError("That text is too long")
+    with _signin_lock:
+        driver = _signin_driver
+        if driver is None:
+            raise ValueError("The sign-in screen is not open")
+        _focus_sign_in_field(driver)
+        element = driver.switch_to.active_element
+        element.send_keys(text)
+        element.send_keys(Keys.ENTER)
 
 
 def sign_in(timeout: float = 600) -> dict:
     """Open Power BI in a visible window and wait for the person to sign in; records the session like a check."""
+    global _signin_driver
     driver = None
     try:
         say("Opening Power BI")
         driver = _browser(headless=False)
+        with _signin_lock:
+            _signin_driver = driver
         driver.get(POWER_BI_HOME)
         if _wait_for_session(driver, 20) != "healthy":
             say("Sign in to Power BI on the screen that opened")
@@ -561,6 +603,8 @@ def sign_in(timeout: float = 600) -> dict:
     except (WebDriverException, NoSuchWindowException):
         return save_session("signed_out", "The sign-in window closed before Power BI finished opening.")
     finally:
+        with _signin_lock:
+            _signin_driver = None
         if driver is not None:
             close_browser(driver)
 

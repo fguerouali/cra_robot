@@ -281,6 +281,8 @@
     #status-pill { min-width: 104px; justify-content: center; font-variant-numeric: tabular-nums; }
 
     .run-form { display: flex; align-items: center; gap: 8px; }
+    .signin-type { display: flex; gap: 8px; margin-top: 12px; }
+    .signin-type input { flex: 1; min-width: 0; }
     .month-field {
       display: inline-flex; align-items: center; height: 40px; padding-left: 2px;
       border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-xs);
@@ -674,6 +676,10 @@
             </button>
           </form>
         </div>
+        <form class="signin-type" id="signin-type" hidden>
+          <input id="signin-text" type="text" autocomplete="off" spellcheck="false" placeholder="Email, mot de passe ou code" aria-label="Texte à envoyer à Power BI">
+          <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+        </form>
         <div class="console-foot">
           <ol class="steps" id="steps" aria-label="Resources"><li class="skel skel-chip"></li><li class="skel skel-chip"></li></ol>
           <div class="steps-pop" id="steps-pop" role="dialog" aria-label="All resources" hidden></div>
@@ -1322,7 +1328,7 @@
           state: waiting ? "running" : "logged-out",
           icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
           title: waiting ? "Waiting for you to sign in" : "Power BI session is logged out",
-          sub: waiting ? "The email box on the sign-in screen is selected. Type there, then press Enter." : "Sign in before running exports",
+          sub: waiting ? "Type in the box below. The sign-in picture does not take the keyboard." : "Sign in before running exports",
           steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
           signin: !waiting,
           screen: waiting && Boolean(signinUrl()),
@@ -1378,6 +1384,7 @@
 
       const retryNames = view.retry?.names || [];
       $("#status-actions").hidden = !view.dismiss && !view.signin && !view.screen;
+      $("#signin-type").hidden = !view.screen;
       $("#status-signin").hidden = !view.signin;
       const screen = $("#status-screen");
       screen.hidden = !view.screen;
@@ -1989,6 +1996,22 @@
       }
       renderSettings();
       refresh();
+    });
+
+    $("#signin-type").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = $("#signin-text");
+      const text = input.value;
+      if (!text.trim()) return;
+      const button = event.target.querySelector("button");
+      try {
+        await withBusy(button, "Sending…", () => post("/api/session/type", { text }));
+        input.value = "";
+        input.focus();
+        toast("Sent to Power BI");
+      } catch (error) {
+        toast(error.message, "error");
+      }
     });
 
     document.addEventListener("click", async (event) => {

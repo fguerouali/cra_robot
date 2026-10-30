@@ -43,6 +43,7 @@ from main import (
     session_status,
     set_resource_excluded,
     storage_summary,
+    type_sign_in,
     update_resource,
 )
 from workflow import DOWNLOADS, month_label
@@ -422,6 +423,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(400, "application/json", json.dumps({"error": "No active resources — add one or un-exclude one first"}).encode())
                     return
                 self._send(202, "application/json", b'{"running": true}')
+                return
+            if path == "/api/session/type":
+                type_sign_in(str(payload.get("text", "")))
+                self._send(200, "application/json", b"{}")
                 return
             if path in ("/api/session/check", "/api/session/signin", "/api/session/cutoff", "/api/purge/files", "/api/purge/history", "/api/signature/remove"):
                 status, body = _settings_action(path, payload)
