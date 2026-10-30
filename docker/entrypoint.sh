@@ -23,8 +23,8 @@ if ! xdpyinfo -display "${DISPLAY:-:99}" >/dev/null 2>&1; then
 fi
 
 openbox >/dev/null 2>&1 &
-x11vnc -display "${DISPLAY:-:99}" -localhost -forever -shared -nopw -quiet -xkb -noxdamage -threads -wait 30 -defer 30 &
-websockify --web=/usr/share/novnc 127.0.0.1:6080 127.0.0.1:5900 >/dev/null 2>&1 &
+x11vnc -display "${DISPLAY:-:99}" -localhost -forever -shared -nopw -quiet -xkb -noxdamage -wait 10 &
+websockify --web=/usr/share/novnc 127.0.0.1:6080 localhost:5900 >/dev/null 2>&1 &
 
 # The app and the sign-in screen stay on localhost. proxy.py is the only public port.
 export APP_HOST=127.0.0.1

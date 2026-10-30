@@ -92,6 +92,17 @@ def _tunnel(left: socket.socket, right: socket.socket) -> None:
                 pass
 
 
+def _reply(conn: socket.socket, status: str, body: bytes, content_type: str) -> None:
+    head = (
+        f"HTTP/1.1 {status}\r\n"
+        f"Content-Type: {content_type}\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+    ).encode()
+    conn.sendall(head + body)
+
+
 def _handle(client: socket.socket) -> None:
     upstream = None
     try:
@@ -101,6 +112,12 @@ def _handle(client: socket.socket) -> None:
             client.close()
             return
         header, rest = got
+        request = header.split(b"\r\n", 1)[0].split(b" ")
+        raw = request[1].split(b"?", 1)[0] if len(request) > 1 else b"/"
+        if raw in (b"/vnc/package.json", b"/package.json"):
+            _reply(client, "200 OK", b'{"name":"novnc","version":"1.3.0"}\n', "application/json")
+            client.close()
+            return
         target, head, upgrade = _rewrite(header)
         if upgrade:
             body = rest
