@@ -420,6 +420,7 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
     else:
         options.add_argument("--window-position=0,0")
         options.add_argument("--start-maximized")
+        options.add_argument(f"--app={POWER_BI_HOME}")
     if os.getenv("IN_CONTAINER"):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -444,7 +445,6 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
         prefs["homepage"] = POWER_BI_HOME
         prefs["homepage_is_newtabpage"] = False
         prefs["session"] = {"restore_on_startup": 4, "startup_urls": [POWER_BI_HOME]}
-        options.add_argument(POWER_BI_HOME)
     options.add_experimental_option("prefs", prefs)
     # Ignore a stale chromedriver on PATH and use one that matches installed Chrome.
     driver_path = os.getenv("CHROMEDRIVER", "").strip() or SeleniumManager().binary_paths(
