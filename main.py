@@ -420,7 +420,6 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
     else:
         options.add_argument("--window-position=0,0")
         options.add_argument("--start-maximized")
-        options.add_argument(f"--app={POWER_BI_HOME}")
     if os.getenv("IN_CONTAINER"):
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -496,15 +495,29 @@ def check_session(timeout: float = 45) -> dict:
     return save_session(status, detail)
 
 
+def _focus_live_window(driver: webdriver.Chrome) -> None:
+    """Microsoft sign-in often opens a second window. Follow it instead of failing on the old one."""
+    handles = driver.window_handles
+    if not handles:
+        raise NoSuchWindowException("The browser window was closed")
+    if driver.current_window_handle not in handles:
+        driver.switch_to.window(handles[-1])
+
+
 def _wait_for_session(driver: webdriver.Chrome, timeout: float) -> str:
-    """'healthy' once the report list shows, 'signed_out' on a sign-in page, else 'unknown' after `timeout`."""
+    """'healthy' once Power BI is open, 'signed_out' on a sign-in page, else 'unknown' after `timeout`."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if sign_in_requested(driver):
-            return "signed_out"
-        body = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
-        if SIGNED_IN_TEXT in body:
-            return "healthy"
+        try:
+            _focus_live_window(driver)
+            if sign_in_requested(driver):
+                return "signed_out"
+            url = driver.current_url or ""
+            body = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
+            if SIGNED_IN_TEXT in body or (url.startswith("https://app.powerbi.com/") and "singleSignOn" not in url):
+                return "healthy"
+        except (WebDriverException, NoSuchWindowException):
+            return "unknown"
         time.sleep(1)
     return "unknown"
 
@@ -524,6 +537,8 @@ def sign_in(timeout: float = 600) -> dict:
         if _wait_for_session(driver, 1) == "healthy":
             return save_session("healthy", "Power BI opens without asking to sign in.")
         return save_session("signed_out", f"Sign-in was not completed within {int(timeout // 60)} minutes.")
+    except (WebDriverException, NoSuchWindowException):
+        return save_session("signed_out", "The sign-in window closed before Power BI finished opening.")
     finally:
         if driver is not None:
             close_browser(driver)
