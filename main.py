@@ -414,7 +414,7 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
     if chrome_bin:
         options.binary_location = chrome_bin
     options.add_argument(f"--user-data-dir={PROFILE}")
-    options.add_argument("--window-size=1280,900")
+    options.add_argument("--window-size=1024,640")
     if headless:
         options.add_argument("--headless=new")
     else:
@@ -425,6 +425,10 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--password-store=basic")
+        options.add_argument("--disable-ipc-flooding-protection")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--renderer-process-limit=2")
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
     options.add_argument("--disable-search-engine-choice-screen")

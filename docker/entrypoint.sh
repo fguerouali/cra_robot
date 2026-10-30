@@ -8,7 +8,7 @@ if [ ! -f "$DATA/config.json" ] && [ -f /app/config.json ]; then
 fi
 
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
-Xvfb "${DISPLAY:-:99}" -screen 0 1280x900x24 -nolisten tcp -ac &
+Xvfb "${DISPLAY:-:99}" -screen 0 1024x640x24 -nolisten tcp -ac &
 i=0
 while [ "$i" -lt 50 ]; do
   if xdpyinfo -display "${DISPLAY:-:99}" >/dev/null 2>&1; then

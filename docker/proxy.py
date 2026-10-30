@@ -92,6 +92,13 @@ def _tunnel(left: socket.socket, right: socket.socket) -> None:
                 pass
 
 
+def _nodelay(sock: socket.socket) -> None:
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except OSError:
+        pass
+
+
 def _reply(conn: socket.socket, status: str, body: bytes, content_type: str) -> None:
     head = (
         f"HTTP/1.1 {status}\r\n"
@@ -106,6 +113,7 @@ def _reply(conn: socket.socket, status: str, body: bytes, content_type: str) -> 
 def _handle(client: socket.socket) -> None:
     upstream = None
     try:
+        _nodelay(client)
         client.settimeout(30)
         got = _read_headers(client)
         if got is None:
@@ -130,6 +138,7 @@ def _handle(client: socket.socket) -> None:
                 rest += chunk
             body = rest[:need]
         upstream = socket.create_connection(target, timeout=10)
+        _nodelay(upstream)
         upstream.sendall(head + body)
         client.settimeout(None)
         upstream.settimeout(None)
