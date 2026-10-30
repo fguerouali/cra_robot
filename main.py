@@ -425,16 +425,23 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--password-store=basic")
-    options.add_experimental_option(
-        "prefs",
-        {
-            "download.default_directory": str(DOWNLOADS),
-            "download.prompt_for_download": False,
-            "download.directory_upgrade": True,
-            "safebrowsing.enabled": True,
-            "plugins.always_open_pdf_externally": True,
-        },
-    )
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-search-engine-choice-screen")
+    prefs = {
+        "download.default_directory": str(DOWNLOADS),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": True,
+        "plugins.always_open_pdf_externally": True,
+    }
+    # Debian Chromium otherwise paints its DuckDuckGo start page until the next navigation.
+    if not headless:
+        prefs["homepage"] = POWER_BI_HOME
+        prefs["homepage_is_newtabpage"] = False
+        prefs["session"] = {"restore_on_startup": 4, "startup_urls": [POWER_BI_HOME]}
+        options.add_argument(POWER_BI_HOME)
+    options.add_experimental_option("prefs", prefs)
     # Ignore a stale chromedriver on PATH and use one that matches installed Chrome.
     driver_path = os.getenv("CHROMEDRIVER", "").strip() or SeleniumManager().binary_paths(
         ["--browser", "chrome", "--skip-driver-in-path"]

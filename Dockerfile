@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     IN_CONTAINER=1 \
     CHROME_BIN=/usr/bin/chromium \
     CHROMEDRIVER=/usr/bin/chromedriver \
-    SIGNIN_URL={origin}/vnc/vnc.html?autoconnect=1&resize=scale
+    SIGNIN_URL={origin}/vnc/vnc.html?autoconnect=1&resize=scale&quality=2&compression=9
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium \

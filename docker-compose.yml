@@ -9,7 +9,7 @@ services:
       - path: .env
         required: false
     environment:
-      SIGNIN_URL: "{origin}/vnc/vnc.html?autoconnect=1&resize=scale"
+      SIGNIN_URL: "{origin}/vnc/vnc.html?autoconnect=1&resize=scale&quality=2&compression=9"
     shm_size: "1gb"
     restart: unless-stopped
 
