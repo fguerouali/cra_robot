@@ -1322,7 +1322,7 @@
           state: waiting ? "running" : "logged-out",
           icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
           title: waiting ? "Waiting for you to sign in" : "Power BI session is logged out",
-          sub: waiting ? "Sign in to Power BI on the screen that opened" : "Sign in before running exports",
+          sub: waiting ? "The email box on the sign-in screen is selected. Type there, then press Enter." : "Sign in before running exports",
           steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
           signin: !waiting,
           screen: waiting && Boolean(signinUrl()),

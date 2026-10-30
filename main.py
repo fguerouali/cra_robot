@@ -522,6 +522,24 @@ def _wait_for_session(driver: webdriver.Chrome, timeout: float) -> str:
     return "unknown"
 
 
+def _focus_sign_in_field(driver: webdriver.Chrome) -> bool:
+    """Put the cursor in the Microsoft email or password box. Clicks on the remote screen often miss it."""
+    try:
+        _focus_live_window(driver)
+        driver.maximize_window()
+        fields = driver.find_elements(By.CSS_SELECTOR, "input[name='loginfmt'], input[type='email'], input[type='password']")
+        visible = [el for el in fields if el.is_displayed()]
+        if not visible:
+            return False
+        active = driver.switch_to.active_element
+        if active in visible:
+            return True
+        visible[0].click()
+        return True
+    except WebDriverException:
+        return False
+
+
 def sign_in(timeout: float = 600) -> dict:
     """Open Power BI in a visible window and wait for the person to sign in; records the session like a check."""
     driver = None
@@ -532,7 +550,10 @@ def sign_in(timeout: float = 600) -> dict:
         if _wait_for_session(driver, 20) != "healthy":
             say("Sign in to Power BI on the screen that opened")
             deadline = time.monotonic() + timeout
+            focused = False
             while time.monotonic() < deadline and _wait_for_session(driver, 5) != "healthy":
+                if not focused:
+                    focused = _focus_sign_in_field(driver)
                 time.sleep(1)
         if _wait_for_session(driver, 1) == "healthy":
             return save_session("healthy", "Power BI opens without asking to sign in.")
