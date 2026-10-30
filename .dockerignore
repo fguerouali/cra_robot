@@ -1,0 +1,17 @@
+.venv
+.agents
+.git
+.gitignore
+__pycache__
+*.py[cod]
+.DS_Store
+.env
+chrome-profile
+downloads
+logs
+runs.jsonl
+runs.jsonl.bak
+session.json
+signature.png
+README.md
+skills-lock.json

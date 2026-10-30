@@ -1,0 +1,18 @@
+services:
+  cra:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8765"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - cra-data:/app/data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SIGNIN_URL: http://{host}:6080/vnc.html?autoconnect=1&resize=scale
+    shm_size: "1gb"
+    restart: unless-stopped
+
+volumes:
+  cra-data:

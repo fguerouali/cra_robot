@@ -1,0 +1,2322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRA Exports</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Indie+Flower&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: "Indie Flower";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/IndieFlower-Regular.ttf") format("truetype");
+    }
+    :root {
+      color-scheme: light;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --surface-muted: #f9fafb;
+      --border: #e4e7ec;
+      --border-strong: #d0d5dd;
+
+      --text: #101828;
+      --text-secondary: #475467;
+      --text-tertiary: #667085;
+
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --primary-soft: #eff4ff;
+      --primary-border: #c7d7fe;
+
+      --success: #067647;
+      --success-soft: #ecfdf3;
+      --success-border: #abefc6;
+      --danger: #b42318;
+      --danger-hover: #912018;
+      --danger-soft: #fef3f2;
+      --danger-border: #fecdca;
+      --warning: #b54708;
+      --warning-soft: #fffaeb;
+      --warning-border: #fedf89;
+      --neutral-soft: #f2f4f7;
+
+      --ring: 0 0 0 3px rgba(29, 78, 216, 0.32);
+      --radius-sm: 6px;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+      --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html { min-width: 20rem; }
+    html.is-logs-open,
+    html.is-logs-open body {
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    ul, ol { margin: 0; padding: 0; list-style: none; }
+    button, input, a { font: inherit; color: inherit; }
+    svg { display: block; flex: 0 0 auto; }
+
+    :focus-visible { outline: none; box-shadow: var(--ring); }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
+    .skip-link {
+      position: fixed; top: 8px; left: 8px; z-index: 50;
+      padding: 8px 12px; border-radius: var(--radius);
+      background: var(--surface); box-shadow: var(--shadow-lg);
+      transform: translateY(-200%);
+    }
+    .skip-link:focus { transform: none; }
+
+    /* ---------- App bar ---------- */
+    .appbar {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: saturate(180%) blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .container { width: min(100% - 48px, 1200px); margin-inline: auto; }
+    .appbar-inner { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 16px; line-height: 24px; }
+
+    .appbar-tools { display: flex; align-items: center; gap: 8px; }
+    .brand-link { color: inherit; text-decoration: none; border-radius: var(--radius); }
+    .nav-btn { position: relative; }
+    .nav-btn[aria-current="page"] { background: var(--neutral-soft); color: var(--text); }
+    .nav-alert { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--surface); }
+
+    /* ---------- Settings ---------- */
+    .page-head { padding: 4px 0; }
+    .page-title { font-size: 20px; line-height: 28px; font-weight: 650; letter-spacing: -0.01em; }
+    .settings { display: grid; gap: 16px; max-width: 760px; margin-inline: auto; }
+    .set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 76px; padding: 16px 20px; }
+    .set-row + .set-row { border-top: 1px solid var(--border); }
+    .set-label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .set-meta { margin-top: 2px; color: var(--text-tertiary); font-size: 13px; }
+    .set-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+    .set-actions .btn svg { width: 14px; height: 14px; }
+    .set-confirm { color: var(--danger); font-size: 13px; font-weight: 600; }
+    .signature-label { position: relative; }
+    .signature-label input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .signature-label:has(input:disabled) { background: var(--surface-muted); border-color: var(--border); color: var(--text-tertiary); box-shadow: none; pointer-events: none; }
+    .signature-panel { position: relative; display: grid; place-items: center; min-height: 184px; margin: 0 20px 16px; padding: 36px 48px 28px; background: var(--surface-muted); border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+    .signature-panel.is-shown { background: #fff; border-style: solid; border-color: var(--border); }
+    .signature-toggle { position: absolute; top: 8px; right: 8px; width: 32px; min-height: 32px; padding: 0; color: var(--text-secondary); }
+    .signature-toggle:hover { color: var(--text); }
+    .signature-preview { display: block; width: auto; max-width: min(280px, 100%); max-height: 96px; margin-top: 8px; object-fit: contain; }
+    .signature-stamp { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100%; text-align: center; }
+    .stamp-date { margin: 0; color: var(--text-tertiary); font-family: "Indie Flower", cursive; font-size: 15px; line-height: 20px; font-weight: 400; }
+    .stamp-name { margin: 0; color: var(--text); font-family: "Indie Flower", cursive; font-size: 20px; line-height: 26px; font-weight: 400; }
+    .set-field { margin-top: 8px; width: min(100%, 320px); }
+    .signature-hidden { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-tertiary); font-size: 13px; font-weight: 500; }
+    .signature-hidden svg { width: 20px; height: 20px; }
+    .health { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; }
+    .health::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .health.is-healthy { color: var(--success); }
+    .health.is-signed_out { color: var(--danger); }
+    .health.is-unknown { color: var(--text-tertiary); }
+    .health.is-loading::before { display: none; }
+    .health.is-checking { color: var(--primary); }
+    .health.is-checking::before { animation: blink 1s ease-in-out infinite; }
+    .signature-panel.is-loading > :not(.signature-skel) { display: none !important; }
+    .signature-panel:not(.is-loading) > .signature-skel { display: none !important; }
+    .signature-skel { width: 200px; height: 80px; border-radius: 8px; }
+    #signature-meta { min-height: 36px; }
+    #signature-actions.is-loading > :not(.skel) { display: none !important; }
+    #signature-actions:not(.is-loading) > .skel { display: none !important; }
+    .card-note { padding: 0 20px 16px; color: var(--text-tertiary); font-size: 12px; }
+    .set-meta { max-width: 52ch; }
+    .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+    .facts.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fact { min-width: 0; padding: 16px 20px; }
+    .fact + .fact { border-left: 1px solid var(--border); }
+    .facts + .set-row { border-top: 1px solid var(--border); }
+    .cutoff-options { display: grid; gap: 8px; padding: 0 20px 16px; }
+    .cutoff-options:not([hidden]) { animation: pop-in 140ms ease-out; transform-origin: top; }
+    .cutoff-option {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px;
+      padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .fact dt { color: var(--text-tertiary); font-size: 12px; font-weight: 500; }
+    .fact dd { margin: 4px 0 0; min-height: 44px; color: var(--text); font-size: 15px; line-height: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .fact dd.is-empty { color: var(--text-tertiary); font-weight: 500; }
+    .fact-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; color: var(--text-tertiary); font-size: 12px; line-height: 18px; font-weight: 400; }
+    .fact .health { font-size: 15px; }
+
+    /* ---------- Pills / tags ---------- */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 24px; padding: 0 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--neutral-soft);
+      color: var(--text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .pill.no-dot::before { display: none; }
+    /* Status reads from the dot and text colour; the pill surface stays neutral. */
+    .pill-success, .pill-danger, .pill-warning, .pill-primary { background: var(--surface); border-color: var(--border); }
+    .pill-success { color: var(--success); }
+    .pill-danger { color: var(--danger); }
+    .pill-warning { color: #8a6409; }
+    .pill-primary { color: var(--primary); }
+
+    .tag {
+      display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+      border-radius: var(--radius-sm); background: var(--neutral-soft);
+      color: var(--text-secondary); font-size: 12px; font-weight: 500;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 40px; padding: 0 16px; border-radius: var(--radius);
+      border: 1px solid transparent; font-weight: 600; white-space: nowrap;
+      cursor: pointer; text-decoration: none;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+    .btn svg { width: 16px; height: 16px; }
+    .btn:disabled { cursor: not-allowed; }
+    .btn-sm { min-height: 32px; padding: 0 12px; font-size: 13px; }
+
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: var(--shadow-xs); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-primary:disabled { background: #a4bcf6; }
+
+    .btn-secondary { background: var(--surface); border-color: var(--border-strong); color: var(--text); box-shadow: var(--shadow-xs); }
+    .btn-secondary:hover:not(:disabled) { background: var(--surface-muted); }
+    .btn-secondary:disabled { background: var(--surface-muted); border-color: var(--border); color: var(--text-tertiary); box-shadow: none; }
+
+    .btn-ghost { background: transparent; color: var(--text-secondary); }
+    .btn-ghost:hover:not(:disabled) { background: var(--neutral-soft); color: var(--text); }
+    .btn-ghost:disabled { color: #98a2b3; }
+    .btn-ghost.is-danger { color: var(--danger); }
+    .btn-ghost.is-danger:hover:not(:disabled) { background: var(--danger-soft); }
+    .btn-ghost.is-danger:disabled { color: #98a2b3; }
+
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
+    .btn-danger:disabled { background: #eba59f; box-shadow: none; }
+
+    .spinner {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid currentColor; border-right-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn .spinner { width: 14px; height: 14px; border-width: 2px; }
+    .btn.is-loading { pointer-events: none; opacity: 0.85; }
+    a.btn.is-loading { color: var(--text-secondary); }
+
+    /* ---------- Loading and motion ---------- */
+    .skel {
+      display: inline-block; height: 12px; border-radius: 6px; vertical-align: middle;
+      background: linear-gradient(90deg, var(--neutral-soft) 30%, #e7ebf0 50%, var(--neutral-soft) 70%);
+      background-size: 300% 100%; animation: shimmer 1.6s ease-in-out infinite;
+    }
+    .skel-line { display: block; }
+    .skel-chip { width: 112px; height: 28px; border-radius: var(--radius-sm); }
+    @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+    .is-new { animation: rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+    .is-leaving { opacity: 0.45; transition: opacity 160ms ease; pointer-events: none; }
+    @keyframes blink { 50% { opacity: 0.35; } }
+
+    /* ---------- Inputs ---------- */
+    .input {
+      width: 100%; height: 40px; padding: 0 12px;
+      border: 1px solid var(--border-strong); border-radius: var(--radius);
+      background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs);
+    }
+    .input::placeholder { color: var(--text-tertiary); }
+    .input:focus-visible { border-color: var(--primary); }
+    .input:disabled { background: var(--surface-muted); color: var(--text-tertiary); cursor: not-allowed; }
+    .input-sm { height: 32px; }
+
+    .search { position: relative; display: flex; align-items: center; }
+    .search > svg { position: absolute; left: 10px; width: 16px; height: 16px; color: var(--text-tertiary); pointer-events: none; }
+    .search .input { padding-left: 34px; padding-right: 34px; -webkit-appearance: none; appearance: none; }
+    .search .input::-webkit-search-decoration,
+    .search .input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+    .search-clear {
+      position: absolute; right: 4px; width: 24px; height: 24px; display: grid; place-items: center;
+      padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-tertiary); cursor: pointer;
+    }
+    .search-clear:hover { background: var(--neutral-soft); color: var(--text); }
+    .search-clear svg { width: 14px; height: 14px; }
+    .search-kbd {
+      position: absolute; right: 8px; min-width: 20px; height: 20px; padding: 0 5px;
+      border: 1px solid var(--border); border-radius: 4px; background: var(--surface-muted);
+      color: var(--text-tertiary); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; pointer-events: none;
+    }
+    .search:focus-within .search-kbd { display: none; }
+
+    /* ---------- Page ---------- */
+    main { padding-block: 20px 32px; }
+    .brand-name { font-size: 15px; line-height: 20px; font-weight: 650; }
+    #status-pill { min-width: 104px; justify-content: center; font-variant-numeric: tabular-nums; }
+
+    .run-form { display: flex; align-items: center; gap: 8px; }
+    .month-field {
+      display: inline-flex; align-items: center; height: 40px; padding-left: 2px;
+      border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-xs);
+    }
+    .month-field:focus-within { border-color: var(--primary); box-shadow: var(--ring); }
+    .month-field input { width: 150px; height: 38px; padding: 0 10px; border: 0; background: transparent; font-variant-numeric: tabular-nums; }
+    .month-field input:focus-visible { box-shadow: none; }
+    .month-field:has(input:disabled) { background: var(--surface-muted); color: var(--text-tertiary); }
+    #run-btn { width: 184px; }
+    #run-icon { width: 16px; height: 16px; display: grid; place-items: center; }
+    #run-label { overflow: hidden; text-overflow: ellipsis; }
+    .btn-xs { min-height: 28px; padding: 0 10px; font-size: 12px; }
+
+    /* ---------- Cards ---------- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: 16px; line-height: 24px; font-weight: 600; }
+    .card-sub { color: var(--text-tertiary); font-size: 13px; }
+
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+
+    /* Keeps space reserved while a control is not relevant in the current state. */
+    .is-invisible { visibility: hidden; }
+
+    /* ---------- Run console: status + controls, every state shares one fixed layout ---------- */
+    .console {
+      height: 120px; padding: 16px 20px;
+      display: grid; grid-template-rows: 48px 28px; gap: 12px;
+    }
+    .console-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+    .status-icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-tertiary); transition: color 200ms ease; }
+    .status-icon svg { width: 24px; height: 24px; }
+    .status-icon .spinner { width: 22px; height: 22px; border-width: 2.5px; }
+    .console[data-state="success"] .status-icon { color: var(--success); }
+    .console[data-state="running"] .status-icon { color: var(--primary); }
+    .console[data-state="failed"] .status-icon { color: var(--danger); }
+    .console[data-state="logged-out"] .status-icon { color: var(--warning); }
+    .status-text { min-width: 0; }
+    .status-title, .status-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-title { font-size: 17px; line-height: 24px; font-weight: 650; letter-spacing: -0.01em; }
+    .status-sub { color: var(--text-secondary); font-size: 13px; line-height: 24px; font-variant-numeric: tabular-nums; }
+    .console[data-state="failed"] .status-sub { color: #7a271a; }
+    .sub-item + .sub-item::before {
+      content: ""; display: inline-block; width: 1px; height: 12px; margin: 0 10px;
+      background: var(--border-strong); vertical-align: -1px;
+    }
+    .sub-item b { color: var(--text); font-weight: 600; }
+    @media (max-width: 1100px) { .sub-item.is-optional { display: none; } }
+
+    .console-foot { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .console-foot .steps { flex: 1 1 auto; min-width: 0; }
+    .status-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+    .status-actions .btn svg { width: 14px; height: 14px; }
+    .status-actions .btn svg.pbi-mark { width: 11px; height: 14px; }
+    .console.is-changing .status-text, .console.is-changing .console-foot { animation: status-in 220ms ease-out; }
+    @keyframes status-in { from { opacity: 0; transform: translateY(2px); } }
+
+    .steps { display: flex; gap: 6px; height: 28px; overflow: hidden; }
+    .steps > li { flex: 0 0 auto; }
+    .step {
+      display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+      color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap;
+    }
+    .step.is-done, .step.is-failed { color: var(--text); }
+    .step.is-active { border-color: var(--primary); color: var(--text); font-weight: 600; }
+    .step-more { font-weight: 600; cursor: pointer; }
+    .step-more:hover, .step-more[aria-expanded="true"] { border-color: var(--border-strong); background: var(--surface-muted); color: var(--text); }
+
+    /* Status mark shared by chips, the resource list popover and run rows. */
+    .mark { width: 14px; height: 14px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-tertiary); }
+    .mark svg { width: 14px; height: 14px; }
+    .mark .dot { width: 7px; height: 7px; border: 1.5px solid currentColor; border-radius: 50%; }
+    .mark .dot.is-solid { background: currentColor; }
+    .is-done > .mark { color: var(--success); }
+    .is-failed > .mark { color: var(--danger); }
+    .is-active > .mark { color: var(--primary); }
+
+    .steps-pop {
+      position: absolute; left: 0; top: calc(100% + 8px); z-index: 20;
+      width: min(340px, 100%); max-height: 300px; overflow-y: auto; overscroll-behavior: contain;
+      padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg);
+    }
+    .pop-head { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; color: var(--text-tertiary); font-size: 12px; font-weight: 600; }
+    .pop-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 13px; }
+    .pop-row:hover { background: var(--surface-muted); }
+    .pop-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pop-state { color: var(--text-tertiary); font-size: 12px; }
+    .pop-row.is-failed .pop-state { color: var(--danger); }
+    .pop-row.is-active .pop-state { color: var(--primary); }
+
+    /* ---------- Stats ---------- */
+    .stats { flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .stat { display: flex; align-items: baseline; gap: 6px; min-width: 0; height: 44px; padding: 12px 16px; }
+    .stat + .stat { border-left: 1px solid var(--border); }
+    .stat-value { order: -1; font-size: 16px; line-height: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .stat-value.is-success { color: var(--success); }
+    .stat-value.is-danger { color: var(--danger); }
+    .stat-value.is-warning { color: #8a6409; }
+    .stat-label { color: var(--text-secondary); font-size: 13px; font-weight: 500; white-space: nowrap; }
+    .stat-meta { min-width: 0; color: var(--text-tertiary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-meta::before { content: "· "; }
+
+    /* ---------- Layout ---------- */
+    /* Runs are the page's main content and scroll with the page; resources sit in a sticky sidebar. */
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; gap: 24px; margin-top: 8px; }
+    .panel { display: flex; flex-direction: column; min-width: 0; }
+    .side { position: sticky; top: 81px; max-height: calc(100vh - 97px); overflow: hidden; }
+    .side .panel-body {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      scrollbar-width: thin; scrollbar-color: transparent transparent;
+    }
+    .side .panel-body:hover { scrollbar-color: var(--border-strong) transparent; }
+    .panel-body > .empty { min-height: 100%; align-content: center; }
+
+    .feed { min-width: 0; }
+    .feed-head {
+      position: sticky; top: 65px; z-index: 5;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 0; background: var(--bg);
+    }
+    .feed-title { display: flex; align-items: center; gap: 8px; font-size: 18px; line-height: 28px; font-weight: 650; }
+    .count { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--neutral-soft); color: var(--text-secondary); font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; }
+    .feed-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .feed-head .search { width: 240px; }
+    .seg { display: inline-flex; gap: 2px; padding: 1px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--neutral-soft); }
+    .seg-btn {
+      display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+      border: 0; border-radius: var(--radius-sm); background: transparent;
+      color: var(--text-secondary); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
+    }
+    .seg-btn:hover { color: var(--text); }
+    .seg-btn[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs); }
+    .seg-btn .n { min-width: 12px; color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .seg-btn .n.is-ko { color: var(--danger); }
+    #panel-history > .empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); }
+
+    /* ---------- Resources ---------- */
+    .add-form { display: flex; gap: 8px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .res-list { padding: 8px; }
+    .res-row {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+      height: 60px; padding: 0 12px; border-radius: var(--radius);
+    }
+    .res-row:hover { background: var(--surface-muted); }
+    .res-name, .res-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .res-name { font-weight: 600; }
+    .res-meta { margin-top: 2px; color: var(--text-tertiary); font-size: 12px; line-height: 16px; }
+    .res-row.is-excluded .res-name { color: var(--text-tertiary); }
+    .res-tools { display: flex; align-items: center; gap: 4px; }
+    .res-edit { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; }
+    .res-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+    .res-confirm-text { color: var(--danger); font-size: 13px; font-weight: 600; }
+    .card-foot { padding: 12px 20px 16px; border-top: 1px solid var(--border); color: var(--text-tertiary); font-size: 12px; }
+
+    /* Switch */
+    .switch {
+      position: relative; width: 36px; height: 20px; flex: 0 0 auto;
+      padding: 0; border: 0; border-radius: 999px; background: var(--border-strong);
+      cursor: pointer; transition: background-color 150ms ease;
+    }
+    .switch::before { content: ""; position: absolute; inset: -12px -4px; }
+    .switch::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+      transition: transform 150ms ease;
+    }
+    .switch[aria-checked="true"] { background: var(--primary); }
+    .switch[aria-checked="true"]::after { transform: translateX(16px); }
+    .switch:disabled { opacity: 0.5; cursor: not-allowed; }
+    .switch.is-pending { opacity: 1; cursor: progress; }
+    .switch.is-pending::after { animation: blink 0.9s ease-in-out infinite; }
+
+    .link { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-size: 13px; font-weight: 600; text-decoration: none; border-radius: var(--radius-sm); }
+    .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .link svg { width: 14px; height: 14px; }
+    .link-meta { color: var(--text-tertiary); font-weight: 500; }
+
+    /* ---------- Runs (one card per run, one row per resource) ---------- */
+    .runs { display: grid; gap: 12px; }
+    .run { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
+    .run-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; }
+    .run-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
+    .run-meta { color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; }
+    .run-id {
+      display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 6px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);
+      color: var(--text); font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; cursor: pointer;
+    }
+    .run-id svg { width: 12px; height: 12px; color: var(--text-tertiary); }
+    .run-id:hover { border-color: var(--border-strong); }
+    .run-id:hover svg { color: var(--text-secondary); }
+    .status-sub .run-id, .logs-title .run-id, .fact-sub .run-id { vertical-align: middle; }
+    .run-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .run-actions .btn svg, .rr-side .btn svg { width: 14px; height: 14px; }
+    .rr-side { display: flex; align-items: center; gap: 12px; }
+    .run-res { padding: 8px 8px 8px; }
+    .rr { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 8px; border-radius: var(--radius-sm); }
+    .rr + .rr { border-top: 1px solid var(--border); border-radius: 0; }
+    .rr-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rr.is-legacy .rr-name { color: var(--text-tertiary); font-weight: 500; }
+    .rr-detail { margin-top: 2px; color: var(--text-tertiary); font-size: 12px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rr.is-ko .rr-detail { color: var(--danger); }
+    .rr.is-retrying .rr-detail { color: var(--primary); }
+    .rr-files { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+    .rr-time { min-width: 7ch; color: var(--text-tertiary); font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .rr details { margin-top: 4px; }
+    .rr summary { width: fit-content; color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; border-radius: var(--radius-sm); }
+    .rr summary:hover { color: var(--text); }
+    .rr pre {
+      margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted);
+      color: var(--text-secondary); font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    .rr-state { display: flex; align-items: center; height: 20px; }
+
+    .more { padding: 16px 0 4px; text-align: center; }
+
+    .empty { display: grid; justify-items: center; gap: 8px; padding: 40px 24px; text-align: center; color: var(--text-tertiary); }
+    .empty-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--neutral-soft); color: var(--text-tertiary); }
+    .empty-icon svg { width: 20px; height: 20px; }
+    .empty-title { color: var(--text); font-weight: 600; }
+
+    /* ---------- Toasts ---------- */
+    .toasts { position: fixed; right: 24px; bottom: 24px; z-index: 40; display: grid; gap: 8px; width: min(360px, calc(100% - 48px)); }
+    .toast {
+      display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+      border-radius: var(--radius); background: var(--text); color: #fff; box-shadow: var(--shadow-lg);
+      animation: toast-in 180ms ease-out;
+    }
+    .toast svg { width: 18px; height: 18px; margin-top: 1px; }
+    .toast.is-success svg { color: #75e0a7; }
+    .toast.is-error svg { color: #fda29b; }
+    .toast > span { flex: 1 1 auto; }
+    .toast-action {
+      flex: 0 0 auto; margin: -4px -6px -4px 0; height: 28px; padding: 0 10px; border: 0; border-radius: var(--radius-sm);
+      background: transparent; color: #93b4ff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .toast-action:hover { background: rgba(255, 255, 255, 0.1); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+    .toast.is-leaving { animation: toast-out 160ms ease-in forwards; }
+    @keyframes toast-out { to { opacity: 0; transform: translateY(4px); } }
+    .steps-pop:not([hidden]) { animation: pop-in 140ms ease-out; transform-origin: top left; }
+    @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+    .pill-primary::before, .pill.is-reconnecting::before { animation: blink 1.4s ease-in-out infinite; }
+
+    /* ---------- Live logs ---------- */
+    .logs-btn { flex: 0 0 auto; gap: 6px; }
+    .logs-btn svg { width: 14px; height: 14px; }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); animation: blink 1.2s ease-in-out infinite; }
+    .logs-backdrop {
+      position: fixed; inset: 0; z-index: 29; border: 0; padding: 0;
+      background: rgba(15, 23, 42, 0.28); cursor: pointer;
+      overscroll-behavior: none; touch-action: none;
+    }
+    .logs-backdrop[hidden] { display: none !important; }
+    .logs-backdrop:not([hidden]) { animation: backdrop-in 180ms ease-out; }
+    @keyframes backdrop-in { from { opacity: 0; } }
+    .logs {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column;
+      width: min(560px, 100%); overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg);
+    }
+    .logs:not([hidden]) { animation: drawer-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .logs.is-leaving { animation: drawer-out 160ms ease-in forwards; }
+    @keyframes drawer-in { from { opacity: 0; transform: translateX(24px); } }
+    @keyframes drawer-out { to { opacity: 0; transform: translateX(24px); } }
+    .logs-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 16px 20px; border-bottom: 1px solid var(--border); }
+    .logs-head > div:first-child { flex: 1 1 auto; min-width: 0; }
+    .logs-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 650; }
+    .logs-sub { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--text-secondary); font-size: 12px; }
+    .logs-tools { display: flex; align-items: center; gap: 4px; }
+    .logs-tools .btn svg { width: 14px; height: 14px; }
+    .logs-scroll { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .logs-body {
+      flex: 1 1 auto; margin: 0; padding: 12px 0 96px; overflow: auto; overscroll-behavior: contain; list-style: none;
+      font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-secondary);
+    }
+    .log { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 1px 20px; }
+    .log:hover { background: var(--neutral-soft); }
+    .log time { color: var(--text-tertiary); user-select: none; }
+    .log span { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .log-shot { grid-column: 2; margin: 6px 0 10px; }
+    .log-shot button {
+      display: block; width: fit-content; max-width: 100%; padding: 0;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;
+      background: transparent; cursor: pointer; transition: border-color 120ms ease;
+    }
+    .log-shot button:hover { border-color: var(--border-strong); }
+    .log-shot img { display: block; max-width: 100%; max-height: 240px; object-fit: contain; background: var(--surface-muted); }
+    .log-shot figcaption { margin-top: 4px; color: var(--text-tertiary); font-family: var(--font); font-size: 12px; }
+    .shot-view {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column; background: var(--surface);
+    }
+    .shot-view[hidden] { display: none !important; }
+    .shot-view-bar {
+      display: flex; align-items: center; gap: 12px; flex: 0 0 auto;
+      padding: 16px 16px 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .shot-view-bar p { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 15px; font-weight: 650; }
+    .shot-view img {
+      flex: 1 1 auto; min-height: 0; width: 100%; padding: 16px;
+      object-fit: contain; background: var(--surface-muted);
+    }
+    .log.is-step span { color: var(--text); font-weight: 600; }
+    .log.is-step:not(:first-child) { margin-top: 8px; }
+    .log.is-ok span { color: var(--success); }
+    .log.is-error span { color: var(--danger); }
+    .log.is-new { animation: rise 160ms ease-out; }
+    .logs-empty { padding: 32px 20px; color: var(--text-tertiary); font-family: var(--font); font-size: 13px; text-align: center; }
+    .logs-jump {
+      position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+      box-shadow: var(--shadow-lg); animation: pop-in 140ms ease-out;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { position: static; max-height: none; order: -1; }
+      .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .stat-meta { display: none; }
+    }
+    @media (max-width: 720px) {
+      .facts { grid-template-columns: 1fr; }
+      .facts.cols-2 { grid-template-columns: 1fr; }
+      .fact + .fact { border-left: 0; border-top: 1px solid var(--border); }
+      .stats { grid-template-columns: 1fr; }
+      .stat + .stat { border-left: 0; border-top: 1px solid var(--border); }
+      .card-head:has(.set-actions) { flex-wrap: wrap; }
+    }
+    @media (max-width: 640px) {
+      .container { width: min(100% - 32px, 1200px); }
+      .console { height: auto; grid-template-rows: auto 28px; }
+      .console-row { grid-template-columns: 28px minmax(0, 1fr); }
+      .run-form { grid-column: 1 / -1; }
+      .month-field { flex: 1 1 auto; min-width: 0; }
+      .month-field input { width: 100%; min-width: 0; }
+      #run-btn { flex: 1 1 auto; width: auto; }
+      .feed-tools, .feed-head .search { width: 100%; }
+      .rr { grid-template-columns: 16px minmax(0, 1fr); }
+      .rr-side { grid-column: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="appbar">
+    <div class="container appbar-inner">
+      <div class="brand">
+        <h1 class="brand-name"><a class="brand-link" href="#">CRA Exports</a></h1>
+        <span class="pill" id="status-pill" hidden></span>
+      </div>
+      <div class="appbar-tools">
+        <a class="btn btn-ghost btn-sm nav-btn" id="nav-settings" href="#settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+          Settings<span class="nav-alert" id="nav-alert" hidden></span>
+        </a>
+        <a class="btn btn-ghost btn-sm nav-btn" id="nav-back" href="#" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Exports
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" id="main">
+    <div class="stack" id="view-exports">
+      <section class="card console" id="status" data-state="idle" aria-labelledby="status-title">
+        <div class="console-row">
+          <span class="status-icon" id="status-icon" aria-hidden="true"></span>
+          <div class="status-text">
+            <h2 class="status-title" id="status-title" aria-live="polite"><span class="sr-only">Loading…</span><span class="skel" style="width: 220px; height: 16px"></span></h2>
+            <p class="status-sub" id="status-sub"><span class="skel" style="width: 300px; height: 10px"></span></p>
+          </div>
+          <form class="run-form" id="run-form">
+            <label class="month-field">
+              <input id="month" type="month" aria-label="Month" required>
+            </label>
+            <button class="btn btn-primary" id="run-btn" type="submit" disabled>
+              <span id="run-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
+              <span id="run-label">Run</span>
+            </button>
+          </form>
+        </div>
+        <div class="console-foot">
+          <ol class="steps" id="steps" aria-label="Resources"><li class="skel skel-chip"></li><li class="skel skel-chip"></li></ol>
+          <div class="steps-pop" id="steps-pop" role="dialog" aria-label="All resources" hidden></div>
+          <button class="btn btn-ghost btn-xs logs-btn" id="logs-btn" type="button" data-open-logs data-logs-run="" aria-controls="logs" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Logs
+          </button>
+          <div class="status-actions" id="status-actions" hidden>
+            <button class="btn btn-secondary btn-xs" id="status-signin" type="button" data-signin hidden><svg class="pbi-mark" viewBox="0 0 1200 1600" aria-hidden="true"><defs><linearGradient id="pbi-tall" x1="558" y1="0" x2="1248" y2="1507" gradientUnits="userSpaceOnUse"><stop stop-color="#E6AD10"/><stop offset="1" stop-color="#C87E0E"/></linearGradient><linearGradient id="pbi-mid" x1="325" y1="400" x2="906" y2="1562" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D751"/><stop offset="1" stop-color="#E6AD10"/></linearGradient><linearGradient id="pbi-short" x1="0" y1="800" x2="320" y2="1582" gradientUnits="userSpaceOnUse"><stop stop-color="#F9E589"/><stop offset="1" stop-color="#F6D751"/></linearGradient></defs><path fill="url(#pbi-tall)" d="M1200 66.75v1466.5c0 36.86-29.89 66.75-66.75 66.75H716.75C679.89 1600 650 1570.11 650 1533.25V66.75C650 29.89 679.89 0 716.75 0h416.5c36.87 0 66.75 29.88 66.75 66.75z"/><path fill="url(#pbi-mid)" d="M875 466.67V1600H325V466.67C325 429.85 354.85 400 391.67 400h416.66c36.82 0 66.67 29.85 66.67 66.67z"/><path fill="url(#pbi-short)" d="M0 866.67v666.66c0 36.82 29.85 66.67 66.67 66.67H550V866.67C550 829.85 520.15 800 483.33 800H66.67C29.85 800 0 829.85 0 866.67z"/></svg>Sign in to Power BI</button>
+            <a class="btn btn-ghost btn-xs" id="status-screen" href="#" target="cra-signin" rel="noopener" hidden>Open sign-in screen</a>
+            <button class="btn btn-secondary btn-xs" id="status-retry" type="button">Retry failed</button>
+            <button class="btn btn-ghost btn-xs" id="status-dismiss" type="button" aria-label="Dismiss this alert" title="Hide this alert until the next run">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>Dismiss
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card stats" aria-label="Overview">
+        <div class="stat"><p class="stat-label">Files</p><p class="stat-value" id="stat-files"><span class="skel" style="width: 18px; height: 14px"></span></p><p class="stat-meta">PDF</p></div>
+        <div class="stat"><p class="stat-label">Runs</p><p class="stat-value" id="stat-runs"><span class="skel" style="width: 18px; height: 14px"></span></p><p class="stat-meta" id="stat-runs-meta"><span class="skel" style="width: 108px; height: 10px"></span></p></div>
+        <div class="stat"><p class="stat-label">Last run</p><p class="stat-value" id="stat-last"><span class="skel" style="width: 64px; height: 14px"></span></p><p class="stat-meta" id="stat-last-meta"><span class="skel" style="width: 72px; height: 10px"></span></p></div>
+      </section>
+
+      <div class="layout">
+        <section class="feed" aria-labelledby="runs-title">
+          <div class="feed-head">
+            <h2 class="feed-title" id="runs-title">Runs <span class="count" id="count-history"><span class="skel" style="width: 10px; height: 10px"></span></span></h2>
+            <div class="feed-tools">
+              <div class="seg" role="group" aria-label="Show runs">
+                <button class="seg-btn" type="button" data-status="all" aria-pressed="true">All <span class="n" id="seg-all"><span class="skel" style="width: 10px; height: 10px"></span></span></button>
+                <button class="seg-btn" type="button" data-status="ko" aria-pressed="false">With failures <span class="n" id="seg-ko"><span class="skel" style="width: 10px; height: 10px"></span></span></button>
+                <button class="seg-btn" type="button" data-status="ok" aria-pressed="false">Succeeded <span class="n" id="seg-ok"><span class="skel" style="width: 10px; height: 10px"></span></span></button>
+              </div>
+              <div class="search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <label class="sr-only" for="filter">Search runs by run ID, resource or month</label>
+                <input class="input input-sm" id="filter" type="search" placeholder="Run ID, resource or month" autocomplete="off">
+                <kbd class="search-kbd" id="filter-kbd" aria-hidden="true">/</kbd>
+                <button class="search-clear" id="filter-clear" type="button" aria-label="Clear search" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="panel-history"></div>
+        </section>
+
+        <aside class="card panel side" aria-labelledby="res-title">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" id="res-title">Resources</h2>
+              <p class="card-sub" id="res-sub"><span class="skel" style="width: 120px; height: 10px"></span></p>
+            </div>
+          </div>
+          <form class="add-form" id="add-form">
+            <label class="sr-only" for="new-name">Resource full name</label>
+            <input class="input" id="new-name" type="text" maxlength="120" placeholder="Full name" autocomplete="off">
+            <button class="btn btn-secondary" id="add-btn" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Add
+            </button>
+          </form>
+          <ul class="res-list panel-body" id="res-list"></ul>
+          <p class="card-foot">Names must match the report's Ressource filter.</p>
+        </aside>
+      </div>
+    </div>
+
+    <div class="settings" id="view-settings" hidden>
+      <div class="page-head">
+        <h2 class="page-title">Settings</h2>
+      </div>
+
+      <section class="card" aria-labelledby="session-title">
+        <div class="card-head">
+          <div><h3 class="card-title" id="session-title">Power BI session</h3><p class="card-sub">The saved sign-in every export reuses</p></div>
+          <div class="set-actions">
+            <button class="btn btn-ghost btn-sm logs-btn" id="session-logs" type="button" data-open-logs data-logs-session aria-controls="logs" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Logs
+            </button>
+            <span class="skel" id="session-logs-skel" style="width: 76px; height: 32px; border-radius: 8px" aria-hidden="true"></span>
+            <span class="skel" id="session-signin-skel" style="width: 69px; height: 32px; border-radius: 8px" aria-hidden="true"></span>
+            <button class="btn btn-primary btn-sm" id="session-signin" type="button" data-signin hidden>Sign in</button>
+            <a class="btn btn-ghost btn-sm" id="session-screen" href="#" target="cra-signin" rel="noopener" hidden>Open sign-in screen</a>
+            <button class="btn btn-secondary btn-sm" id="session-check" type="button">Check session</button>
+          </div>
+        </div>
+        <dl class="facts">
+          <div class="fact"><dt>Status</dt><dd><span class="health is-loading" id="session-health"><span class="skel" style="width: 92px; height: 14px"></span></span><span class="fact-sub" id="session-detail"><span class="skel" style="width: 180px; height: 10px"></span></span></dd></div>
+          <div class="fact"><dt>Last checked</dt><dd id="session-checked"><span class="skel" style="width: 132px; height: 16px"></span><span class="fact-sub"><span class="skel" style="width: 72px; height: 10px"></span></span></dd></div>
+          <div class="fact"><dt>Last successful export</dt><dd id="session-export"><span class="skel" style="width: 132px; height: 16px"></span><span class="fact-sub"><span class="skel" style="width: 150px; height: 10px"></span></span></dd></div>
+        </dl>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Cut off session</p>
+            <p class="set-meta" id="cutoff-meta">End the saved sign-in. Exports stay paused until you sign in again.</p>
+          </div>
+          <div class="set-actions">
+            <button class="btn btn-secondary btn-sm" id="cutoff-toggle" type="button" aria-expanded="false" aria-controls="cutoff-options">Cut off session</button>
+          </div>
+        </div>
+        <div class="cutoff-options" id="cutoff-options" role="group" aria-label="Ways to cut off the session" hidden>
+          <div class="cutoff-option">
+            <div>
+              <p class="set-label">Log out of Power BI <span class="tag" id="sign-out-tag">Recommended</span></p>
+              <p class="set-meta" data-cutoff-meta="sign_out">Signs you out of Power BI. Takes up to a minute.</p>
+            </div>
+            <button class="btn btn-danger btn-sm" type="button" data-cutoff="sign_out">Log out</button>
+          </div>
+          <div class="cutoff-option">
+            <div>
+              <p class="set-label">Delete saved sign-in</p>
+              <p class="set-meta" data-cutoff-meta="forget">Forgets the sign-in on the server right away. Power BI may still count it as active for a while.</p>
+            </div>
+            <div class="set-actions">
+              <button class="btn btn-ghost btn-sm is-danger" type="button" data-cutoff="forget" data-ask>Delete</button>
+              <span class="set-confirm" data-forget-confirm hidden>Delete the saved sign-in?</span>
+              <button class="btn btn-danger btn-sm" type="button" data-cutoff="forget" data-forget-confirm hidden>Delete</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-forget-cancel data-forget-confirm hidden>Cancel</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="signature-title">
+        <div class="set-row">
+          <div>
+            <p class="set-label" id="signature-title">Signature</p>
+            <p class="set-meta" id="signature-meta"><span class="skel" style="width: 260px; height: 10px"></span></p>
+          </div>
+          <div class="set-actions is-loading" id="signature-actions">
+            <span class="skel" style="width: 160px; height: 32px; border-radius: 8px" aria-hidden="true"></span>
+            <label class="btn btn-secondary btn-sm signature-label" id="signature-label">
+              <input id="signature-file" type="file" accept="image/png,.png">
+              <span id="signature-pick">Add signature</span>
+            </label>
+            <button class="btn btn-ghost btn-sm is-danger" id="signature-remove" type="button" hidden>Remove</button>
+            <span class="set-confirm" data-signature-confirm hidden>Remove your signature?</span>
+            <button class="btn btn-danger btn-sm" id="signature-remove-yes" type="button" data-signature-confirm hidden>Remove</button>
+            <button class="btn btn-ghost btn-sm" id="signature-remove-no" type="button" data-signature-confirm hidden>Cancel</button>
+          </div>
+        </div>
+        <div class="signature-panel is-loading" id="signature-panel">
+          <span class="skel signature-skel" aria-hidden="true"></span>
+          <button class="btn btn-ghost signature-toggle" id="signature-toggle" type="button" aria-expanded="false" aria-controls="signature-panel" aria-label="Show signature">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <div class="signature-stamp" id="signature-stamp" hidden>
+            <p class="stamp-date" id="stamp-date"></p>
+            <p class="stamp-name" id="stamp-name"></p>
+            <img class="signature-preview" id="signature-preview" alt="Your signature">
+          </div>
+          <p class="signature-hidden" id="signature-hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>Hidden</p>
+        </div>
+        <div class="set-row" id="signature-name-row">
+          <div>
+            <p class="set-label">Full name</p>
+            <p class="set-meta">Printed above the signature on the monthly PDF. Leave blank to use the resource’s name.</p>
+            <input class="input input-sm set-field" id="signature-name" type="text" maxlength="120" placeholder="Full name" autocomplete="name">
+          </div>
+          <button class="switch" id="signature-include-name" type="button" role="switch" aria-checked="true" aria-label="Include full name"></button>
+        </div>
+        <div class="set-row" id="signature-date-row">
+          <div>
+            <p class="set-label">Date</p>
+            <p class="set-meta">Printed at the top of the signature block.</p>
+          </div>
+          <button class="switch" id="signature-include-datetime" type="button" role="switch" aria-checked="true" aria-label="Include date"></button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="storage-title">
+        <div class="card-head"><div><h3 class="card-title" id="storage-title">Storage</h3><p class="card-sub">Kept on the server</p></div></div>
+        <dl class="facts cols-2">
+          <div class="fact"><dt>Exported files</dt><dd id="storage-files"><span class="skel" style="width: 72px; height: 16px"></span><span class="fact-sub"><span class="skel" style="width: 88px; height: 10px"></span></span></dd></div>
+          <div class="fact"><dt>Run history</dt><dd id="storage-history"><span class="skel" style="width: 64px; height: 16px"></span><span class="fact-sub"><span class="skel" style="width: 140px; height: 10px"></span></span></dd></div>
+        </dl>
+      </section>
+
+      <section class="card" aria-labelledby="danger-title">
+        <div class="card-head"><div><h3 class="card-title" id="danger-title">Danger zone</h3><p class="card-sub">These actions can't be undone</p></div></div>
+        <div class="set-row" data-purge-row="files">
+          <div><p class="set-label">Purge exported files</p><p class="set-meta" id="files-meta">Deletes every exported PDF. Run history stays, but its downloads stop working.</p></div>
+          <div class="set-actions" id="files-actions"><span class="skel" style="width: 94px; height: 32px; border-radius: 8px" aria-hidden="true"></span></div>
+        </div>
+        <div class="set-row" data-purge-row="history">
+          <div><p class="set-label">Purge run history</p><p class="set-meta" id="history-meta">Deletes every run and its logs. Exported files stay on disk.</p></div>
+          <div class="set-actions" id="history-actions"><span class="skel" style="width: 111px; height: 32px; border-radius: 8px" aria-hidden="true"></span></div>
+        </div>
+        <p class="card-note" id="data-note" hidden>Available once the current run or session check finishes.</p>
+      </section>
+    </div>
+  </main>
+
+  <button class="logs-backdrop" id="logs-backdrop" type="button" hidden aria-label="Close logs"></button>
+  <aside class="logs" id="logs" role="dialog" aria-labelledby="logs-title" hidden>
+    <div class="logs-head">
+      <div>
+        <h2 class="logs-title" id="logs-title">Logs</h2>
+        <p class="logs-sub" id="logs-sub"></p>
+      </div>
+      <div class="logs-tools">
+        <button class="btn btn-ghost btn-xs" id="logs-copy" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Copy
+        </button>
+        <button class="btn btn-ghost btn-xs" id="logs-close" type="button" aria-label="Close logs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="logs-scroll">
+      <ol class="logs-body" id="logs-body" aria-label="Log lines"></ol>
+      <button class="btn btn-secondary btn-xs logs-jump" id="logs-jump" type="button" hidden>Jump to latest</button>
+    </div>
+  </aside>
+
+  <div class="shot-view" id="shot-view" role="dialog" aria-labelledby="shot-title" hidden>
+    <div class="shot-view-bar">
+      <p id="shot-title">Screen at the moment of failure</p>
+      <button class="btn btn-ghost btn-xs" id="shot-close" type="button" aria-label="Close screenshot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <img id="shot-image" alt="The report as it looked when this export failed">
+  </div>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <script>
+    const ICON = {
+      logs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg>',
+      download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg>',
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>',
+      error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>',
+      user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
+      folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+      hash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M5 9h15M4 15h15M10 4 8 20M16 4l-2 16"/></svg>',
+      retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>',
+      lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+      clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+      play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
+    };
+
+    const $ = (selector) => document.querySelector(selector);
+    const ui = {
+      data: null,
+      editing: null,
+      confirming: null,
+      filter: "",
+      status: "all",
+      historyLimit: 10,
+      runningSince: null,
+      runNames: [],
+      keys: {},
+      dismissedAlert: localStorage.getItem("cra.dismissedAlert") || "",
+      stepsOpen: false,
+      starting: false,
+      settings: null,
+      confirmPurge: null,
+      confirmForget: false,
+      confirmSignature: false,
+      signatureShown: false,
+      signingIn: false,
+      signinWindow: null,
+      seen: {},
+    };
+
+    /* ---------- Formatting ---------- */
+    const esc = (value) => String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const runIdButton = (id) => id
+      ? `<button class="run-id" type="button" data-copy="${esc(id)}" title="Copy run ID" aria-label="Run ${esc(id)}, copy ID">${ICON.hash}${esc(id)}</button>`
+      : "";
+    const firstLine = (value) => String(value || "").split("\n")[0].trim();
+    const fileName = (path) => String(path).split("/").pop();
+    const isWeekly = (path) => fileName(path).includes("_hebdo");
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const bytes = (n) => n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
+    const when = (value) => {
+      const date = new Date(value);
+      if (!value || Number.isNaN(date.getTime())) return "—";
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+    };
+    const ago = (value) => {
+      const seconds = (Date.now() - new Date(value).getTime()) / 1000;
+      if (!(seconds >= 0)) return "";
+      if (seconds < 60) return "Just now";
+      const m = Math.round(seconds / 60);
+      if (m < 60) return `${m} min ago`;
+      const h = Math.round(m / 60);
+      return h < 24 ? `${h} h ago` : plural(Math.round(h / 24), "day") + " ago";
+    };
+    /* m:ss (or h:mm:ss) so a ticking timer keeps its width. */
+    const timer = (seconds) => {
+      const s = Math.max(0, Math.floor(seconds));
+      const h = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = String(s % 60).padStart(2, "0");
+      return h ? `${h}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
+    };
+    /* Estimates are rounded to whole minutes; seconds would suggest false precision. */
+    const approx = (seconds) => {
+      const m = Math.max(1, Math.round(seconds / 60));
+      return m < 60 ? `≈ ${m} min` : `≈ ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+    };
+    const timeOfDay = (ms) => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(ms);
+    const monthLabel = (value) => {
+      const [m, y] = String(value || "").split("/").map(Number);
+      return m && y ? new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(new Date(y, m - 1)) : value || "";
+    };
+    const clock = (seconds) => {
+      const s = Math.max(0, Math.floor(seconds));
+      const m = Math.floor(s / 60);
+      return m ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
+    };
+    const duration = (entry) => {
+      const ms = new Date(entry.finished_at) - new Date(entry.started_at);
+      return Number.isFinite(ms) && ms >= 0 ? clock(ms / 1000) : "";
+    };
+    const span = (from, to) => {
+      const ms = new Date(to) - new Date(from);
+      return Number.isFinite(ms) && ms >= 0 ? clock(ms / 1000) : "";
+    };
+    /* Short, human reason for a KO: drops Selenium's "Message:" prefix, doc links and the stack trace. */
+    const reason = (message) => firstLine(message).replace(/^Message:\s*/i, "").replace(/;\s*For documentation.*$/i, "").replace(/\s+yet\.?$/i, ".").replace(/\.\.$/, ".").trim() || "Unknown error";
+    const errorDetail = (message) => {
+      const text = String(message || "").split(/\nStacktrace:/)[0].trim();
+      return text.replace(/^Message:\s*/i, "") ? text : "";
+    };
+    const monthInputToValue = (value) => { const [y, m] = value.split("-"); return `${m}/${y}`; };
+    const currentMonthInput = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`; };
+    const formatStampDate = (now) => `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+
+    const resources = () => ui.data?.resources || [];
+    const activeNames = () => resources().filter((r) => !r.excluded).map((r) => r.name);
+    const running = () => Boolean(ui.data?.running);
+    const sameName = (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase();
+    const koEntries = (entries) => entries.filter((e) => e.status !== "ok");
+    /* KO resources of a run that are still in the list, so they can be retried. */
+    const retryable = (entries) => [...new Set(koEntries(entries).map((e) => e.resource_name)
+      .filter((name) => name && resources().some((r) => sameName(r.name, name))))];
+
+    /* History grouped into runs by run ID (short hash), oldest first. */
+    function groupRuns() {
+      const runs = [];
+      for (const entry of ui.data.history) {
+        const id = entry.run_id || entry.id;
+        const prev = runs.at(-1);
+        if (prev?.id === id) prev.entries.push(entry);
+        else runs.push({ id, entries: [entry] });
+      }
+      return runs;
+    }
+    const runEnd = (entries) => Math.max(...entries.map((e) => new Date(e.finished_at).getTime() || 0));
+    const lastBatch = () => groupRuns().reduce((last, run) => (!last || runEnd(run.entries) >= runEnd(last) ? run.entries : last), null) || [];
+
+    /* With `retryOf`, `names` are re-run inside that run instead of starting a new one. */
+    async function startRun(monthValue, names, retryOf) {
+      try {
+        await post("/api/run", { month_value: monthValue, ...(names ? { resources: names } : {}), ...(retryOf ? { retry_of: retryOf } : {}) });
+        toast(retryOf ? `Retrying ${names.length === 1 ? names[0] : plural(names.length, "resource")} in ${retryOf}` : `Export started for ${plural(activeNames().length, "resource")}`);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+      await refresh();
+    }
+
+    /* ---------- API ---------- */
+    async function post(url, body) {
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error();
+        render(await response.json());
+      } catch {
+        const pill = $("#status-pill");
+        pill.className = "pill pill-danger is-reconnecting";
+        pill.hidden = false;
+        pill.textContent = "Reconnecting…";
+      }
+    }
+
+    /* ---------- Toasts ---------- */
+    /* `action` adds a button to the toast, e.g. { label: "Undo", run: () => … }. */
+    function toast(message, kind = "success", action = null) {
+      const el = document.createElement("div");
+      el.className = `toast is-${kind}`;
+      const icon = kind === "error" ? ICON.error : kind === "success" ? ICON.check : "";
+      el.innerHTML = `${icon}<span>${esc(message)}</span>`;
+      if (action) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "toast-action";
+        button.textContent = action.label;
+        button.onclick = () => { leave(); action.run(); };
+        el.append(button);
+      }
+      const leave = () => { el.classList.add("is-leaving"); setTimeout(() => el.remove(), 160); };
+      $("#toasts").append(el);
+      setTimeout(leave, action ? 6000 : 4000);
+    }
+
+    /* ---------- Loading ---------- */
+    function renderSkeletons() {
+      const runCard = () => `<li class="run" aria-hidden="true">
+        <div class="run-head"><span class="skel" style="width: 78px; height: 24px"></span><span class="skel" style="width: 74px; height: 22px"></span><span class="skel" style="width: 150px"></span></div>
+        <div class="run-res">${[180, 140].map((w) => `<div class="rr"><span class="skel" style="width: 14px; height: 14px; border-radius: 50%"></span>
+          <div><span class="skel skel-line" style="width: ${w}px"></span><span class="skel skel-line" style="width: ${w + 90}px; height: 10px; margin-top: 8px"></span></div></div>`).join("")}</div></li>`;
+      $("#panel-history").innerHTML = `<ol class="runs">${runCard()}${runCard()}</ol>`;
+      $("#res-list").innerHTML = [130, 160, 110].map((w) => `<li class="res-row" aria-hidden="true">
+        <div><span class="skel skel-line" style="width: ${w}px"></span><span class="skel skel-line" style="width: 56px; height: 10px; margin-top: 8px"></span></div>
+        <span class="skel" style="width: 36px; height: 20px; border-radius: 999px"></span></li>`).join("");
+    }
+
+    /* Shows a pending state on `button` while `task` runs, keeping its size so nothing shifts. */
+    async function withBusy(button, label, task) {
+      const html = button.innerHTML;
+      button.style.minWidth = `${button.offsetWidth}px`;
+      button.disabled = true;
+      button.classList.add("is-loading");
+      button.setAttribute("aria-busy", "true");
+      button.innerHTML = `<span class="spinner" aria-hidden="true"></span>${esc(label)}`;
+      try {
+        return await task();
+      } finally {
+        if (button.isConnected) {
+          button.innerHTML = html;
+          button.disabled = false;
+          button.classList.remove("is-loading");
+          button.removeAttribute("aria-busy");
+          button.style.minWidth = "";
+        }
+      }
+    }
+
+    /* Marks items not seen before so they animate in once; the first render staggers the visible ones. */
+    function entering(kind, ids) {
+      const seen = ui.seen[kind];
+      const first = !seen;
+      ui.seen[kind] = new Set(ids);
+      return (id, index) => {
+        if (first) return index < 8 ? ` is-new" style="animation-delay: ${index * 40}ms` : "";
+        return seen.has(id) ? "" : " is-new";
+      };
+    }
+
+    /* ---------- Render ---------- */
+    function render(data) {
+      const wasRunning = running();
+      ui.data = data;
+      if (data.running && !wasRunning) {
+        ui.runNames = data.current_run?.resources || activeNames();
+        ui.runningSince = data.current_run?.started_at ? new Date(data.current_run.started_at).getTime() : Date.now();
+      }
+      if (!data.running && wasRunning) {
+        const failed = koEntries(lastBatch()).length;
+        toast(failed ? `Run finished · ${failed} failed` : "Run succeeded", failed ? "error" : "success");
+      }
+      if (!data.running) ui.runningSince = null;
+
+      renderHeader();
+      $("#nav-alert").hidden = !(data.session?.status === "signed_out" || data.session?.has_profile === false);
+      if (onSettings()) loadSettings();
+      renderStatus();
+      renderStats();
+      renderResources();
+      renderActivity();
+    }
+
+    const loggedOut = () => {
+      if (running()) return false;
+      const session = ui.data?.session;
+      if (!session) return true;
+      return session.status === "signed_out" || session.has_profile === false;
+    };
+    const signingIn = () => Boolean(ui.signingIn || (ui.data?.session?.checking && ui.data.session.task === "signin"));
+    const signinUrl = () => String((ui.settings && ui.settings.signin_url) || (ui.data && ui.data.signin_url) || "").replaceAll("{host}", location.hostname);
+    const openSignInScreen = () => {
+      const url = signinUrl();
+      if (!url) return;
+      try {
+        if (ui.signinWindow && !ui.signinWindow.closed) ui.signinWindow.focus();
+        else ui.signinWindow = window.open(url, "cra-signin");
+      } catch { /* the Open sign-in screen link stays available */ }
+    };
+    const closeSignInScreen = () => {
+      try { if (ui.signinWindow && !ui.signinWindow.closed) ui.signinWindow.close(); } catch { /* already closed */ }
+      ui.signinWindow = null;
+    };
+
+    const runBlocked = () => loggedOut() || signingIn();
+    const blockedAttr = () => runBlocked() ? ' disabled title="Sign in to Power BI first"' : "";
+
+    function renderHeader() {
+      const pill = $("#status-pill");
+      const busy = running();
+      const run = ui.data.current_run;
+      pill.className = "pill pill-primary";
+      pill.hidden = !busy;
+      pill.textContent = busy ? (run ? `Running ${run.index}/${run.total}` : "Running") : "";
+
+      const month = $("#month");
+      if (!month.value) month.value = currentMonthInput();
+      month.disabled = busy;
+
+      const count = activeNames().length;
+      const button = $("#run-btn");
+      const blocked = runBlocked();
+      button.disabled = busy || ui.starting || count === 0 || blocked || Boolean(ui.data.session?.checking);
+      button.title = blocked ? "Sign in to Power BI first" : "";
+      button.setAttribute("aria-busy", String(busy || ui.starting));
+      $("#run-icon").innerHTML = ui.starting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.play;
+      $("#run-label").textContent = ui.starting ? "Starting…" : busy ? "Running…" : count ? `Run ${plural(count, "resource")}` : "Run";
+    }
+
+    const MARK = {
+      done: ICON.check,
+      failed: ICON.error,
+      active: '<span class="dot is-solid"></span>',
+      queued: '<span class="dot"></span>',
+    };
+    const mark = (state) => `<span class="mark" aria-hidden="true">${MARK[state]}</span>`;
+
+    const stepChip = ({ name, state, label }) =>
+      `<li class="step is-${state}" title="${esc(label ? `${name} · ${label}` : name)}">${mark(state)}${esc(name)}<span class="sr-only"> — ${esc(label)}</span></li>`;
+    const moreChip = (text) =>
+      `<li><button class="step step-more" id="steps-more" type="button" aria-controls="steps-pop" aria-expanded="${ui.stepsOpen}">${esc(text)}</button></li>`;
+
+    /* Fits the chips on one line: collapses finished items, then hides trailing ones behind "+N more", which lists them all. */
+    function renderSteps(items) {
+      const list = $("#steps");
+      ui.stepItems = items;
+      const show = (view, more) => { list.innerHTML = view.map(stepChip).join("") + (more ? moreChip(more) : ""); };
+      if (!items.length) {
+        show([{ name: "No active resources", state: "queued", label: "" }]);
+        ui.stepsOpen = false;
+        renderStepsPop();
+        return;
+      }
+
+      const overflows = () => list.scrollWidth > list.clientWidth + 1;
+      const hidden = [];
+      const moreText = () => hidden.length ? `+${hidden.reduce((n, item) => n + (item.count || 1), 0)} more` : "View all";
+      let view = items.slice();
+      let collapsed = false;
+      show(view);
+
+      const done = items.filter((item) => item.state === "done");
+      if (overflows() && done.length > 1) {
+        view = [{ name: `${done.length} exported`, state: "done", label: done.map((d) => d.name).join(", "), count: done.length },
+                ...items.filter((item) => item.state !== "done")];
+        collapsed = true;
+        show(view, moreText());
+      }
+      while (overflows() && view.length > 1) {
+        hidden.unshift(view.pop());
+        collapsed = true;
+        show(view, moreText());
+      }
+      if (!collapsed) ui.stepsOpen = false;
+      renderStepsPop();
+    }
+
+    function renderStepsPop() {
+      const pop = $("#steps-pop");
+      const items = ui.stepItems || [];
+      pop.hidden = !ui.stepsOpen;
+      $("#steps-more")?.setAttribute("aria-expanded", String(ui.stepsOpen));
+      if (!ui.stepsOpen) return;
+      const count = (state) => items.filter((item) => item.state === state).length;
+      const summary = [count("done") && `${count("done")} exported`, count("failed") && `${count("failed")} failed`].filter(Boolean).join(" · ");
+      pop.innerHTML = `<div class="pop-head"><span>${esc(plural(items.length, "resource"))}</span><span>${esc(summary)}</span></div>`
+        + items.map((item) => `<div class="pop-row is-${item.state}">${mark(item.state)}<span class="pop-name" title="${esc(item.name)}">${esc(item.name)}</span><span class="pop-state">${esc(item.label)}</span></div>`).join("");
+    }
+
+    window.addEventListener("resize", () => { if (ui.stepItems) renderSteps(ui.stepItems); });
+    document.addEventListener("click", (event) => {
+      if (event.target.closest("#steps-more")) {
+        ui.stepsOpen = !ui.stepsOpen;
+        renderStepsPop();
+      } else if (ui.stepsOpen && !event.target.closest("#steps-pop")) {
+        ui.stepsOpen = false;
+        renderStepsPop();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && ui.stepsOpen) {
+        ui.stepsOpen = false;
+        renderStepsPop();
+        $("#steps-more")?.focus();
+      }
+    });
+
+    /* Mean duration of recent successful exports, used to estimate time left in a run. */
+    function averageDuration() {
+      const recent = ui.data.history.filter((e) => e.status === "ok" && e.resource_name).slice(-10)
+        .map((e) => (new Date(e.finished_at) - new Date(e.started_at)) / 1000).filter((s) => s > 0);
+      return recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
+    }
+
+    function renderStatus() {
+      const card = $("#status");
+      const run = ui.data.current_run;
+      const batch = lastBatch();
+      const latest = batch.at(-1) || ui.data.history.at(-1);
+      const failures = batch.filter((e) => e.status !== "ok");
+      const runId = latest?.run_id || "";
+      /* A retry keeps the run ID, so a dismissed alert only stays hidden for that exact outcome. */
+      const alertKey = batch.length ? `${runId}@${runEnd(batch)}` : "";
+      let view;
+
+      if (running() && run) {
+        const names = ui.runNames.length ? ui.runNames : [run.resource_name];
+        const done = Math.max(0, run.index - 1);
+        const now = Date.now();
+        const elapsed = (now - ui.runningSince) / 1000;
+        const avg = averageDuration();
+        /* The current resource started when the previous one in this run finished. */
+        const finished = ui.data.history.filter((e) => e.run_id === run.run_id && e.finished_at >= run.started_at);
+        const currentStart = finished.length ? new Date(finished.at(-1).finished_at).getTime() : ui.runningSince;
+        const left = avg ? Math.max(0, avg - (now - currentStart) / 1000) + avg * (run.total - run.index) : 0;
+        const parts = [{ html: runIdButton(run.run_id) }, { html: `<b>${timer(elapsed)}</b> elapsed` }];
+        if (avg && left < 30) parts.push({ html: "almost done" });
+        else if (avg) parts.push({ html: `<b>${approx(left)}</b> left` }, { html: `ends ≈ ${esc(timeOfDay(now + left * 1000))}`, optional: true });
+        if (run.total > 1) parts.push({ html: `resource ${run.index} of ${run.total}`, optional: true });
+        view = {
+          state: "running",
+          icon: '<span class="spinner" aria-hidden="true"></span>',
+          title: run.retry ? `Retrying ${run.resource_name}` : `Exporting for ${run.resource_name}`,
+          sub: [`${monthLabel(run.month_value)}`, ...parts.map((p) => p.html.replace(/<[^>]+>/g, ""))].join(" · "),
+          subHtml: parts.map((p) => `<span class="sub-item${p.optional ? " is-optional" : ""}">${p.html}</span>`).join(""),
+          steps: names.map((name, i) => i < done
+            ? { name, state: "done", label: "Exported" }
+            : i === done ? { name, state: "active", label: "Exporting" } : { name, state: "queued", label: "Queued" }),
+          dismiss: false,
+        };
+      } else if (signingIn() || loggedOut()) {
+        const waiting = signingIn();
+        view = {
+          state: waiting ? "running" : "logged-out",
+          icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
+          title: waiting ? "Waiting for you to sign in" : "Power BI session is logged out",
+          sub: waiting ? "Sign in to Power BI on the screen that opened" : "Sign in before running exports",
+          steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
+          signin: !waiting,
+          screen: waiting && Boolean(signinUrl()),
+          dismiss: false,
+        };
+      } else if (failures.length && alertKey !== ui.dismissedAlert) {
+        view = {
+          state: "failed",
+          icon: ICON.error,
+          title: failures.length === 1
+            ? `${failures[0].resource_name} failed${batch.length > 1 ? ` · ${batch.length - 1} exported` : ""}`
+            : `${failures.length} of ${batch.length} resources failed`,
+          sub: `${runId} · ` + (failures.length === 1 ? reason(failures[0].message) : failures.map((e) => `${e.resource_name}: ${reason(e.message)}`).join(" · ")),
+          subHtml: `${runIdButton(runId)} · ` + esc(failures.length === 1 ? reason(failures[0].message) : failures.map((e) => `${e.resource_name}: ${reason(e.message)}`).join(" · ")),
+          retry: { names: retryable(batch), month: latest.month_value, runId },
+          steps: batch.map((e) => e.status === "ok"
+            ? { name: e.resource_name, state: "done", label: "Exported" }
+            : { name: e.resource_name, state: "failed", label: "Failed" }),
+          dismiss: true,
+        };
+      } else {
+        const names = activeNames();
+        const excluded = resources().length - names.length;
+        const skipped = excluded ? ` · ${excluded} excluded` : "";
+        view = {
+          state: latest && !failures.length ? "success" : "idle",
+          icon: latest && !failures.length ? ICON.check : ICON.clock,
+          title: names.length ? `Ready to run ${plural(names.length, "resource")}` : "Nothing to run",
+          sub: !names.length
+            ? "No active resources"
+            : latest
+              ? `Last run ${runId} · ${when(latest.finished_at)} · ${failures.length ? `${batch.length - failures.length}/${batch.length} exported` : "succeeded"}${skipped}`
+              : `No runs yet${skipped}`,
+          subHtml: latest && names.length
+            ? `Last run ${runIdButton(runId)} · ${esc(when(latest.finished_at))} · ${failures.length ? `${batch.length - failures.length}/${batch.length} exported` : "succeeded"}${esc(skipped)}`
+            : "",
+          steps: names.map((name) => ({ name, state: "queued", label: "Included" })),
+          dismiss: false,
+        };
+      }
+
+      if (ui.keys.state && ui.keys.state !== view.state) {
+        card.classList.remove("is-changing");
+        void card.offsetWidth;
+        card.classList.add("is-changing");
+      }
+      ui.keys.state = view.state;
+      card.dataset.state = view.state;
+      $("#status-icon").innerHTML = view.icon;
+      $("#status-title").textContent = view.title;
+      if (view.subHtml) $("#status-sub").innerHTML = view.subHtml; else $("#status-sub").textContent = view.sub;
+      $("#status-sub").title = view.sub;
+
+      const retryNames = view.retry?.names || [];
+      $("#status-actions").hidden = !view.dismiss && !view.signin && !view.screen;
+      $("#status-signin").hidden = !view.signin;
+      const screen = $("#status-screen");
+      screen.hidden = !view.screen;
+      if (view.screen) screen.href = signinUrl();
+      $("#status-dismiss").hidden = !view.dismiss;
+      ui.logsRun = view.state === "running" ? run?.run_id || "" : view.dismiss ? runId : "";
+      renderLogsButtons();
+      const retry = $("#status-retry");
+      retry.hidden = !retryNames.length;
+      if (!retry.classList.contains("is-loading")) retry.textContent = `Retry ${retryNames.length} failed`;
+      retry.onclick = retryNames.length ? () => withBusy(retry, "Retrying…", () => startRun(view.retry.month, retryNames, view.retry.runId)) : null;
+      $("#status-dismiss").onclick = () => {
+        const previous = ui.dismissedAlert;
+        setDismissed(alertKey);
+        $("#run-btn").focus();
+        toast("Alert dismissed", "info", { label: "Undo", run: () => setDismissed(previous) });
+      };
+
+      const key = JSON.stringify([view.steps, view.dismiss, view.signin, retryNames.length]);
+      if (ui.keys.steps !== key) {
+        ui.keys.steps = key;
+        renderSteps(view.steps);
+      }
+    }
+
+    function setDismissed(runId) {
+      ui.dismissedAlert = runId;
+      localStorage.setItem("cra.dismissedAlert", runId);
+      renderStatus();
+    }
+
+    function renderStats() {
+      const history = ui.data.history;
+      const files = history.reduce((n, e) => n + (e.files || []).length, 0);
+      const ko = koEntries(history).length;
+      const batch = lastBatch();
+      const batchKo = koEntries(batch);
+      const latest = batch.at(-1);
+
+      $("#stat-files").textContent = files;
+      $("#stat-runs").textContent = groupRuns().length;
+      $("#stat-runs-meta").textContent = history.length ? `${history.length - ko} exported · ${ko} failed` : "—";
+
+      const last = $("#stat-last");
+      last.className = "stat-value" + (!latest ? "" : !batchKo.length ? " is-success" : batchKo.length === batch.length ? " is-danger" : " is-warning");
+      last.textContent = !latest ? "—" : !batchKo.length ? "Succeeded" : batchKo.length === batch.length ? "Failed" : "Partial";
+      const lastMeta = latest ? when(latest.finished_at) : "—";
+      $("#stat-last-meta").textContent = lastMeta;
+      $("#stat-last-meta").parentElement.title = batchKo.length ? `Failed: ${batchKo.map((e) => e.resource_name || "Legacy run").join(", ")}` : "";
+    }
+
+    /* ---------- Resources ---------- */
+    function renderResources(force = false) {
+      const all = resources();
+      const active = activeNames().length;
+      $("#res-sub").textContent = all.length ? `${active} active · ${all.length - active} excluded` : "No resources yet";
+      $("#new-name").disabled = running();
+      $("#add-btn").disabled = running();
+
+      const key = JSON.stringify([all, running(), ui.editing, ui.confirming]);
+      if (!force && ui.keys.resources === key) return;
+      if (!force && ui.editing && document.activeElement?.id === "edit-input") return;
+      ui.keys.resources = key;
+
+      const list = $("#res-list");
+      const scrollTop = list.scrollTop;
+      requestAnimationFrame(() => { list.scrollTop = scrollTop; });
+      if (!all.length) {
+        list.innerHTML = `<li class="empty"><span class="empty-icon">${ICON.user}</span><p class="empty-title">No resources</p></li>`;
+        return;
+      }
+      const locked = running() ? "disabled" : "";
+      const enter = entering("resources", all.map((item) => item.name));
+      list.innerHTML = all.map((item, index) => {
+        const name = esc(item.name);
+        if (ui.editing === item.name) {
+          return `<li class="res-row">
+            <div class="res-edit">
+              <label class="sr-only" for="edit-input">Resource name</label>
+              <input class="input input-sm" id="edit-input" value="${name}" maxlength="120">
+              <button class="btn btn-primary btn-sm" type="button" data-action="save" data-name="${name}">Save</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>
+            </div></li>`;
+        }
+        if (ui.confirming === item.name) {
+          return `<li class="res-row">
+            <div style="min-width:0"><p class="res-name" title="${name}">${name}</p></div>
+            <div class="res-confirm">
+              <span class="res-confirm-text">Remove?</span>
+              <button class="btn btn-danger btn-sm" type="button" data-action="confirm-remove" data-name="${name}">Remove</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>
+            </div></li>`;
+        }
+        return `<li class="res-row${item.excluded ? " is-excluded" : ""}${enter(item.name, index)}">
+          <div style="min-width:0">
+            <p class="res-name" title="${name}">${name}</p>
+            <p class="res-meta">${item.excluded ? "Excluded" : "Included"}</p>
+          </div>
+          <div class="res-tools">
+            <button class="switch" type="button" role="switch" aria-checked="${!item.excluded}" aria-label="Include ${name} in runs"
+              data-action="toggle" data-name="${name}" ${locked}></button>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-name="${name}" ${locked}>Edit</button>
+            <button class="btn btn-ghost btn-sm is-danger" type="button" data-action="remove" data-name="${name}" ${locked}>Remove</button>
+          </div></li>`;
+      }).join("");
+
+      const input = $("#edit-input");
+      if (input) {
+        input.focus({ preventScroll: true });
+        input.select();
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); $('[data-action="save"]').click(); }
+          if (event.key === "Escape") { ui.editing = null; renderResources(true); }
+        });
+      }
+    }
+
+    $("#res-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button || button.disabled) return;
+      const { action, name } = button.dataset;
+      try {
+        if (action === "toggle") {
+          const exclude = button.getAttribute("aria-checked") === "true";
+          button.setAttribute("aria-checked", String(!exclude));
+          button.classList.add("is-pending");
+          button.disabled = true;
+          try {
+            await post("/api/resources/exclude", { name, excluded: exclude });
+          } catch (error) {
+            button.setAttribute("aria-checked", String(exclude));
+            button.classList.remove("is-pending");
+            button.disabled = false;
+            throw error;
+          }
+          toast(exclude ? `${name} excluded from runs` : `${name} included in runs`);
+        } else if (action === "edit") {
+          ui.editing = name; ui.confirming = null;
+          renderResources(true);
+          return;
+        } else if (action === "remove") {
+          ui.confirming = name; ui.editing = null;
+          renderResources(true);
+          return;
+        } else if (action === "cancel") {
+          ui.editing = null; ui.confirming = null;
+          renderResources(true);
+          return;
+        } else if (action === "save") {
+          const value = $("#edit-input").value;
+          await withBusy(button, "Saving…", () => post("/api/resources/update", { old_name: name, name: value }));
+          ui.editing = null;
+          toast("Resource renamed");
+        } else if (action === "confirm-remove") {
+          const row = button.closest(".res-row");
+          row.classList.add("is-leaving");
+          try {
+            await withBusy(button, "Removing…", () => post("/api/resources/delete", { name }));
+          } catch (error) {
+            row.classList.remove("is-leaving");
+            throw error;
+          }
+          ui.confirming = null;
+          toast(`${name} removed`);
+        }
+        await refresh();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
+
+    $("#add-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = $("#new-name");
+      if (!input.value.trim()) { input.focus(); toast("Enter a name", "error"); return; }
+      try {
+        await withBusy($("#add-btn"), "Adding…", () => post("/api/resources", { name: input.value }));
+        toast(`${input.value.trim()} added`);
+        input.value = "";
+        await refresh();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
+
+    /* ---------- Activity ---------- */
+    function emptyState(title) {
+      return `<div class="empty"><span class="empty-icon">${ICON.folder}</span><p class="empty-title">${esc(title)}</p></div>`;
+    }
+
+    function moreButton(kind, shown, total) {
+      if (shown >= total) return "";
+      return `<div class="more"><button class="btn btn-secondary btn-sm" type="button" data-more="${kind}">Show more (${total - shown} left)</button></div>`;
+    }
+
+    function renderActivity() {
+      const history = ui.data.history;
+      const runs = runViews();
+      const searched = runs.filter((run) => run.rows.length);
+      const hasKo = (run) => run.items.some((i) => i.state === "ko");
+      const allOk = (run) => run.items.every((i) => i.state === "ok");
+      const byStatus = { all: searched, ko: searched.filter(hasKo), ok: searched.filter(allOk) };
+      const shown = byStatus[ui.status];
+      $("#seg-all").textContent = byStatus.all.length;
+      $("#seg-ko").textContent = byStatus.ko.length;
+      $("#seg-ko").classList.toggle("is-ko", byStatus.ko.length > 0);
+      $("#seg-ok").textContent = byStatus.ok.length;
+      const filtered = ui.filter || ui.status !== "all";
+      $("#count-history").textContent = filtered ? `${shown.length} / ${runs.length}` : runs.length;
+
+      const live = ui.data.current_run;
+      const key = JSON.stringify([history.map((e) => [e.id || e.started_at, e.status, e.finished_at, (e.files || []).length]), running(), live?.run_id, live?.index,
+        resources().map((r) => r.name), ui.filter, ui.status, ui.historyLimit, ui.data.logged_runs, runBlocked()]);
+      if (ui.keys.activity === key) return;
+      ui.keys.activity = key;
+
+      const historyPanel = $("#panel-history");
+      const openDetails = [...historyPanel.querySelectorAll("details[open]")].map((d) => d.dataset.id);
+      const empty = !runs.length
+        ? emptyState("No runs yet")
+        : ui.status === "ko" && !ui.filter ? emptyState("No runs with failures")
+        : emptyState("No matching runs");
+      const enter = entering("runs", runs.map((run) => run.id));
+      historyPanel.innerHTML = shown.length
+        ? `<ol class="runs">${shown.slice(0, ui.historyLimit).map((run, i) => runCard(run, enter(run.id, i))).join("")}</ol>` + moreButton("history", Math.min(ui.historyLimit, shown.length), shown.length)
+        : empty;
+      historyPanel.querySelectorAll("details").forEach((d) => { if (openDetails.includes(d.dataset.id)) d.open = true; });
+    }
+
+    /* Finished runs, newest first. The run in progress lives in the console and joins the list once it ends. */
+    function runViews() {
+      const live = running() ? ui.data.current_run : null;
+      const retrying = (run, name) => live?.retry && run.id === live.run_id && live.resources.some((r) => sameName(r, name));
+      const views = groupRuns().filter((run) => !live || live.retry || run.id !== live.run_id).reverse().map((run) => ({
+        id: run.id,
+        month: run.entries[0].month_value,
+        startedAt: run.entries.map((e) => e.started_at).sort()[0],
+        finishedAt: run.entries.map((e) => e.finished_at).sort().at(-1),
+        items: run.entries.map((entry) => ({ name: entry.resource_name, state: entry.status === "ok" ? "ok" : "ko", retrying: retrying(run, entry.resource_name), entry })),
+        retry: retryable(run.entries),
+      }));
+      return views.map((run) => {
+        const monthHit = !ui.filter || [run.month, run.id].some((v) => String(v || "").toLowerCase().includes(ui.filter));
+        const rows = monthHit ? run.items : run.items.filter((item) => String(item.name || "legacy").toLowerCase().includes(ui.filter));
+        return { ...run, rows };
+      });
+    }
+
+    function runCard(run, extraClass = "") {
+      const ok = run.items.filter((i) => i.state === "ok").length;
+      const ko = run.items.filter((i) => i.state === "ko").length;
+      const legacy = run.items.every((i) => !i.name);
+      const state = legacy ? "legacy" : !ko ? "ok" : ok ? "partial" : "failed";
+      const pill = {
+        ok: '<span class="pill pill-success">Succeeded</span>',
+        partial: '<span class="pill pill-warning">Partial</span>',
+        failed: '<span class="pill pill-danger">Failed</span>',
+        legacy: ko ? '<span class="pill pill-danger">Failed</span>' : '<span class="pill pill-success">Succeeded</span>',
+      }[state];
+      const took = span(run.startedAt, run.finishedAt);
+      const retryAll = run.retry.length > 1 && !running()
+        ? `<button class="btn btn-ghost btn-sm" type="button" data-retry="${esc(run.id)}"${blockedAttr()}>${ICON.retry}Retry ${run.retry.length} failed</button>` : "";
+      const withFiles = run.items.filter((i) => (i.entry.files || []).length);
+      const zip = withFiles.length
+        ? `<a class="btn btn-secondary btn-sm" href="${esc(zipUrl(run, withFiles))}" data-zip download>${ICON.download}Download all</a>` : "";
+      const logs = (ui.data.logged_runs || []).includes(run.id)
+        ? `<button class="btn btn-ghost btn-sm" type="button" data-open-logs data-logs-run="${esc(run.id)}" aria-label="Logs for run ${esc(run.id)}">${ICON.logs}Logs</button>` : "";
+      return `<li class="run is-${state}${extraClass}">
+        <div class="run-head">
+          <div class="run-title">${runIdButton(run.id)}${pill}${run.month ? `<span class="tag">${esc(run.month)}</span>` : ""}</div>
+          <span class="run-meta">${esc(when(run.startedAt))}${took ? ` · ${esc(took)}` : ""}</span>
+          ${zip || retryAll || logs ? `<div class="run-actions">${logs}${retryAll}${zip}</div>` : ""}
+        </div>
+        <ul class="run-res" aria-label="Resources in this run">${run.rows.map((item) => resultRow(item, run)).join("")}</ul>
+      </li>`;
+    }
+
+    async function downloadZip(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Could not prepare the zip");
+      const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "CRA.zip";
+      const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await response.blob()), download: name });
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function zipUrl(run, items) {
+      const query = new URLSearchParams({ name: `CRA_${String(run.month || "export").replace("/", "-")}` });
+      items.forEach((i) => i.entry.files.forEach((file) => query.append("path", file.path)));
+      return `/download/zip?${query}`;
+    }
+
+    function resultRow(item, run) {
+      const name = esc(item.name || "Legacy run");
+      const { entry } = item;
+      const ok = item.state === "ok";
+      const why = reason(entry.message);
+      const detail = errorDetail(entry.message);
+      const files = (entry.files || []).map((file) =>
+        `<a class="link" href="${esc("/download?path=" + encodeURIComponent(file.path))}" download title="${esc(fileName(file.path))}">${ICON.download}${isWeekly(file.path) ? "Weekly PDF" : "Monthly PDF"} <span class="link-meta">${esc(bytes(file.size))}</span></a>`).join("");
+      const body = item.retrying
+        ? `<p class="rr-detail">Retrying…</p>`
+        : ok
+        ? (files ? `<div class="rr-files">${files}</div>` : `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>`)
+        : `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>${detail && detail.replace(/^Message:\s*/i, "") !== why
+            ? `<details data-id="${esc(entry.id || entry.started_at)}"><summary>Error details</summary><pre>${esc(detail)}</pre></details>` : ""}`;
+      return `<li class="rr is-${item.state}${item.retrying ? " is-retrying" : ""}${item.name ? "" : " is-legacy"}">
+        ${item.retrying
+          ? `<span class="rr-state is-active" title="Retrying">${mark("active")}<span class="sr-only">Retrying</span></span>`
+          : `<span class="rr-state is-${ok ? "done" : "failed"}" title="${ok ? "Exported" : "Failed"}">${mark(ok ? "done" : "failed")}<span class="sr-only">${ok ? "Exported" : "Failed"}</span></span>`}
+        <div style="min-width:0"><p class="rr-name" title="${name}">${name}</p>${body}</div>
+        <div class="rr-side">${canRetry(item, run)
+          ? `<button class="btn btn-secondary btn-xs" type="button" data-retry-one="${esc(item.name)}" data-run="${esc(run.id)}" data-month="${esc(run.month)}" aria-label="Retry ${name}"${blockedAttr()}>${ICON.retry}Retry</button>` : ""}<span class="rr-time">${esc(duration(entry))}</span></div>
+      </li>`;
+    }
+
+    const canRetry = (item, run) => item.state === "ko" && !running() && run.retry.some((name) => sameName(name, item.name));
+
+    document.addEventListener("click", (event) => {
+      const one = event.target.closest("[data-retry-one]");
+      if (one) {
+        withBusy(one, "Retrying…", () => startRun(one.dataset.month, [one.dataset.retryOne], one.dataset.run));
+        return;
+      }
+      const zip = event.target.closest("[data-zip]");
+      if (zip) {
+        event.preventDefault();
+        if (!zip.classList.contains("is-loading")) {
+          withBusy(zip, "Preparing…", () => downloadZip(zip.href)).catch((error) => toast(error.message, "error"));
+        }
+        return;
+      }
+      const copy = event.target.closest("[data-copy]");
+      if (copy) {
+        navigator.clipboard.writeText(copy.dataset.copy).then(() => toast(`Copied ${copy.dataset.copy}`), () => toast("Could not copy", "error"));
+        return;
+      }
+      const retry = event.target.closest("[data-retry]");
+      if (retry) {
+        const run = groupRuns().find((r) => r.id === retry.dataset.retry);
+        if (run) withBusy(retry, "Retrying…", () => startRun(run.entries[0].month_value, retryable(run.entries), run.id));
+        return;
+      }
+      const more = event.target.closest("[data-more]");
+      if (!more) return;
+      ui.historyLimit += 10;
+      renderActivity();
+    });
+
+    const filterInput = $("#filter");
+    function setFilter(value) {
+      filterInput.value = value;
+      ui.filter = value.trim().toLowerCase();
+      ui.historyLimit = 10;
+      $("#filter-clear").hidden = !value;
+      $("#filter-kbd").hidden = Boolean(value);
+      renderActivity();
+    }
+    filterInput.addEventListener("input", () => setFilter(filterInput.value));
+    filterInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (filterInput.value) setFilter(""); else filterInput.blur();
+    });
+    $("#filter-clear").addEventListener("click", () => { setFilter(""); filterInput.focus(); });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.target.closest("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault();
+      filterInput.focus();
+    });
+
+    document.querySelectorAll(".seg-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        ui.status = button.dataset.status;
+        ui.historyLimit = 10;
+        document.querySelectorAll(".seg-btn").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        renderActivity();
+      });
+    });
+
+    /* ---------- Run ---------- */
+    $("#run-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const month = $("#month");
+      if (!month.reportValidity()) return;
+      ui.starting = true;
+      renderHeader();
+      try {
+        await startRun(monthInputToValue(month.value));
+      } finally {
+        ui.starting = false;
+        renderHeader();
+      }
+    });
+
+    /* ---------- Settings ---------- */
+    const onSettings = () => location.hash === "#settings";
+
+    function route() {
+      const settings = onSettings();
+      $("#view-exports").hidden = settings;
+      $("#view-settings").hidden = !settings;
+      $("#nav-settings").hidden = settings;
+      $("#nav-back").hidden = !settings;
+      $("#nav-settings").removeAttribute("aria-current");
+      document.title = settings ? "Settings · CRA Exports" : "CRA Exports";
+      ui.confirmPurge = null;
+      ui.confirmSignature = false;
+      ui.signatureShown = false;
+      window.scrollTo(0, 0);
+      if (settings) loadSettings();
+    }
+    window.addEventListener("hashchange", route);
+
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (response.ok) { ui.settings = await response.json(); renderSettings(); }
+      } catch { /* the header already shows the connection state */ }
+    }
+
+    function renderSettings() {
+      const data = ui.settings;
+      if (!data) return;
+      const session = data.session || {};
+      const cuttingOff = Boolean(ui.cutoffBusy || (session.checking && session.task === "cutoff"));
+      const waitingSignIn = Boolean(ui.signingIn || (session.checking && session.task === "signin"));
+      const checking = cuttingOff || waitingSignIn || session.checking || $("#session-check").classList.contains("is-loading");
+      const health = $("#session-health");
+      const state = checking ? "checking" : session.status || "unknown";
+      health.className = `health is-${state}`;
+      health.textContent = waitingSignIn ? "Waiting for sign-in…" : cuttingOff ? "Logging out…"
+        : { checking: "Checking…", healthy: "Online", signed_out: "Logged out", unknown: "Not checked" }[state] || "Unknown";
+      $("#session-detail").textContent = waitingSignIn ? "Sign in to Power BI on the screen that opened"
+        : cuttingOff ? "Ending the saved sign-in"
+        : checking ? "Checking your Power BI session" : session.detail || "Run a check to find out";
+      const lastOk = [...(ui.data?.history || [])].reverse().find((e) => e.status === "ok");
+      setFact("#session-checked", session.checked_at && when(session.checked_at), session.checked_at && ago(session.checked_at), "Never");
+      if (lastOk) {
+        const el = $("#session-export");
+        el.classList.remove("is-empty");
+        el.innerHTML = `${esc(when(lastOk.finished_at))}<span class="fact-sub">${esc(lastOk.resource_name)}${runIdButton(lastOk.run_id)}</span>`;
+      } else {
+        setFact("#session-export", null, null, "None yet");
+      }
+
+      const { storage, history: runs } = data;
+      const logs = data.logs || { runs: 0 };
+      setFact("#storage-files", storage.pdfs && plural(storage.pdfs, "PDF"), storage.pdfs && `${bytes(storage.bytes)} on disk`, "None");
+      setFact("#storage-history", runs.runs && plural(runs.runs, "run"), runs.runs && `${plural(runs.entries, "result")} · ${logs.runs} with logs`, "None");
+
+      const locked = Boolean(ui.data?.running || data.running || checking);
+      if (!$("#session-check").classList.contains("is-loading")) $("#session-check").disabled = locked;
+      const signInButton = $("#session-signin");
+      signInButton.hidden = !(session.status === "signed_out" || session.has_profile === false || waitingSignIn);
+      $("#session-signin-skel")?.remove();
+      $("#session-logs-skel")?.remove();
+      if (!signInButton.classList.contains("is-loading")) signInButton.disabled = locked;
+      const screen = $("#session-screen");
+      const screenUrl = signinUrl();
+      screen.hidden = !(waitingSignIn && screenUrl);
+      if (screenUrl) screen.href = screenUrl;
+      const blockedReason = {
+        sign_out: !session.has_profile ? "Nothing to log out of: there is no saved sign-in on the server."
+          : session.status === "signed_out" ? "Power BI is already logged out." : "",
+        forget: !session.has_profile ? "There is no saved sign-in to delete." : "",
+      };
+      const nothingToCut = Boolean(blockedReason.sign_out && blockedReason.forget);
+      if (nothingToCut) ui.cutoffOpen = false;
+      const cutoffMeta = $("#cutoff-meta");
+      cutoffMeta.dataset.default ||= cutoffMeta.textContent;
+      cutoffMeta.textContent = nothingToCut && !cuttingOff ? "Nothing to cut off: there is no saved sign-in on the server." : cutoffMeta.dataset.default;
+      const toggle = $("#cutoff-toggle");
+      const open = Boolean(ui.cutoffOpen || ui.cutoffBusy);
+      $("#cutoff-options").hidden = !open;
+      if (!open || blockedReason.forget) ui.confirmForget = false;
+      $('[data-cutoff="forget"][data-ask]').hidden = ui.confirmForget;
+      document.querySelectorAll("[data-forget-confirm]").forEach((el) => { el.hidden = !ui.confirmForget; });
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Cancel" : "Cut off session";
+      toggle.disabled = Boolean(ui.cutoffBusy || ((locked || nothingToCut) && !open));
+      document.querySelectorAll("[data-cutoff]").forEach((button) => {
+        const reason = ui.cutoffBusy ? "" : blockedReason[button.dataset.cutoff];
+        const meta = $(`[data-cutoff-meta="${button.dataset.cutoff}"]`);
+        meta.dataset.default ||= meta.textContent;
+        meta.textContent = reason || meta.dataset.default;
+        button.title = reason;
+        if (button.dataset.cutoff === "sign_out") $("#sign-out-tag").hidden = Boolean(reason);
+        if (!button.classList.contains("is-loading")) button.disabled = locked || Boolean(reason);
+      });
+      $("#data-note").hidden = !locked;
+      renderPurge("files", "Purge files", storage.pdfs ? `Delete ${plural(storage.pdfs, "PDF")} (${bytes(storage.bytes)})?` : "", locked || !storage.bytes);
+      renderPurge("history", "Purge history", runs.runs ? `Delete ${plural(runs.runs, "run")} and ${logs.runs === 1 ? "its" : "their"} logs?` : "", locked || !runs.entries);
+      renderSignature(data.signature, locked);
+      renderLogsButtons();
+    }
+
+    function renderSignature(signature, locked) {
+      signature = signature || {};
+      const confirming = Boolean(ui.confirmSignature && signature.saved && !locked);
+      if (!confirming) ui.confirmSignature = false;
+      if (!signature.saved) ui.signatureShown = false;
+      const shown = Boolean(ui.signatureShown && signature.saved);
+      const includeName = signature.include_name !== false;
+      const includeDate = signature.include_datetime !== false;
+      $("#signature-meta").textContent = signature.saved
+        ? "On the bottom-right of the monthly PDF."
+        : "No signature yet. Add a PNG image to sign the monthly PDF.";
+      $("#signature-actions").classList.remove("is-loading");
+      const panel = $("#signature-panel");
+      panel.classList.remove("is-loading");
+      panel.hidden = !signature.saved;
+      panel.classList.toggle("is-shown", shown);
+      panel.classList.toggle("is-hidden", !shown);
+      const toggle = $("#signature-toggle");
+      toggle.setAttribute("aria-expanded", String(shown));
+      toggle.setAttribute("aria-label", shown ? "Hide signature" : "Show signature");
+      toggle.innerHTML = shown
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+      $("#signature-stamp").hidden = !shown;
+      $("#signature-hidden").hidden = shown;
+      const preview = $("#signature-preview");
+      if (signature.saved) {
+        const src = `/signature.png?v=${encodeURIComponent(signature.updated_at || "")}`;
+        if (preview.getAttribute("src") !== src) preview.src = src;
+      } else preview.removeAttribute("src");
+      $("#stamp-date").hidden = !includeDate;
+      $("#stamp-date").textContent = formatStampDate(new Date());
+      $("#stamp-name").hidden = !includeName;
+      $("#stamp-name").textContent = (signature.signer_name || "").trim() || "Resource name";
+      const nameInput = $("#signature-name");
+      if (document.activeElement !== nameInput) nameInput.value = signature.signer_name || "";
+      nameInput.disabled = locked || !includeName;
+      setSwitch($("#signature-include-name"), includeName, locked);
+      setSwitch($("#signature-include-datetime"), includeDate, locked);
+      $("#signature-label").hidden = confirming;
+      $("#signature-file").disabled = locked;
+      const pick = $("#signature-pick");
+      if (!pick.classList.contains("is-loading")) pick.textContent = signature.saved ? "Replace" : "Add signature";
+      const remove = $("#signature-remove");
+      remove.hidden = confirming || !signature.saved;
+      if (!remove.classList.contains("is-loading")) remove.disabled = locked;
+      document.querySelectorAll("[data-signature-confirm]").forEach((el) => { el.hidden = !confirming; });
+    }
+
+    function setSwitch(button, on, locked) {
+      button.setAttribute("aria-checked", String(on));
+      button.disabled = locked;
+    }
+
+    function setFact(selector, value, sub, empty) {
+      const el = $(selector);
+      el.classList.toggle("is-empty", !value);
+      el.innerHTML = `${esc(value || empty)}${value && sub ? `<span class="fact-sub">${esc(sub)}</span>` : ""}`;
+    }
+
+    function renderPurge(kind, label, question, disabled) {
+      const box = $(`#${kind}-actions`);
+      if (box.querySelector(".is-loading")) return;
+      const confirming = ui.confirmPurge === kind && !disabled;
+      const key = JSON.stringify([confirming, disabled, question]);
+      if (box.dataset.key === key) return;
+      box.dataset.key = key;
+      box.innerHTML = confirming
+        ? `<span class="set-confirm">${esc(question)}</span>
+           <button class="btn btn-danger btn-sm" type="button" data-purge="${kind}" data-confirmed>Delete</button>
+           <button class="btn btn-ghost btn-sm" type="button" data-purge-cancel>Cancel</button>`
+        : `<button class="btn btn-ghost btn-sm is-danger" type="button" data-purge="${kind}" ${disabled ? "disabled" : ""}>${label}</button>`;
+      if (confirming) box.querySelector("[data-confirmed]").focus();
+    }
+
+    $("#view-settings").addEventListener("click", async (event) => {
+      if (event.target.closest("[data-purge-cancel]")) {
+        ui.confirmPurge = null;
+        renderSettings();
+        return;
+      }
+      const button = event.target.closest("[data-purge]");
+      if (!button || button.disabled) return;
+      const kind = button.dataset.purge;
+      if (!("confirmed" in button.dataset)) {
+        ui.confirmPurge = kind;
+        renderSettings();
+        return;
+      }
+      try {
+        ui.settings = await withBusy(button, "Deleting…", () => post(`/api/purge/${kind}`, {}));
+        toast(kind === "files" ? "Exported files deleted" : "Run history cleared");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+      ui.confirmPurge = null;
+      await refresh();
+      renderSettings();
+    });
+
+    $("#session-check").addEventListener("click", async () => {
+      const button = $("#session-check");
+      try {
+        const pending = withBusy(button, "Checking…", () => post("/api/session/check", {}));
+        renderSettings();
+        ui.settings = await pending;
+        const status = ui.settings.session.status;
+        toast(status === "healthy" ? "Power BI session is online" : status === "signed_out" ? "Logged out — sign in to run exports" : "Could not confirm the session",
+          status === "healthy" ? "success" : "error");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+      renderSettings();
+      refresh();
+    });
+
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-signin]");
+      if (!button || button.disabled) return;
+      openSignInScreen();
+      ui.signingIn = true;
+      renderStatus();
+      renderHeader();
+      renderSettings();
+      try {
+        const result = await withBusy(button, "Waiting for sign-in…", () => post("/api/session/signin", {}));
+        if (ui.settings) ui.settings = result;
+        const online = result.session?.status === "healthy";
+        toast(online ? "Signed in · Power BI session is online" : "Still logged out — sign-in was not completed", online ? "success" : "error");
+      } catch (error) {
+        toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
+      }
+      ui.signingIn = false;
+      closeSignInScreen();
+      await refresh();
+      renderSettings();
+    });
+
+    $("#cutoff-toggle").addEventListener("click", () => {
+      ui.cutoffOpen = !ui.cutoffOpen;
+      renderSettings();
+      if (ui.cutoffOpen) document.querySelector("[data-cutoff]:not(:disabled)")?.focus();
+    });
+
+    $("#cutoff-options").addEventListener("click", async (event) => {
+      if (event.target.closest("[data-forget-cancel]")) {
+        ui.confirmForget = false;
+        renderSettings();
+        $('[data-cutoff="forget"][data-ask]').focus();
+        return;
+      }
+      const button = event.target.closest("[data-cutoff]");
+      if (!button || button.disabled) return;
+      if (button.hasAttribute("data-ask")) {
+        ui.confirmForget = true;
+        renderSettings();
+        $("[data-forget-cancel]").focus();
+        return;
+      }
+      const signOut = button.dataset.cutoff === "sign_out";
+      ui.cutoffBusy = true;
+      try {
+        const pending = withBusy(button, signOut ? "Logging out…" : "Deleting…", () => post("/api/session/cutoff", { method: button.dataset.cutoff }));
+        renderSettings();
+        ui.settings = await pending;
+        ui.cutoffOpen = false;
+        toast(signOut ? "Logged out of Power BI" : "Saved sign-in deleted", "success");
+      } catch (error) {
+        toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
+      }
+      ui.cutoffBusy = false;
+      ui.confirmForget = false;
+      renderSettings();
+      refresh();
+    });
+
+    $("#signature-file").addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = "";
+      if (!file || event.target.disabled) return;
+      const png = file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
+      if (!png) { toast("Choose a PNG image", "error"); return; }
+      if (file.size > 2 * 1024 * 1024) { toast("Choose a PNG image up to 2 MB", "error"); return; }
+      const pick = $("#signature-pick");
+      try {
+        ui.settings = await withBusy(pick, "Saving…", async () => {
+          const response = await fetch("/api/signature", { method: "POST", headers: { "Content-Type": "image/png" }, body: file });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || "Could not save the signature");
+          return data;
+        });
+        toast("Signature saved", "success");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+      renderSettings();
+    });
+
+    $("#signature-toggle").addEventListener("click", () => {
+      ui.signatureShown = !ui.signatureShown;
+      renderSettings();
+    });
+
+    async function saveSignatureOptions(payload) {
+      try {
+        ui.settings = await post("/api/signature/options", payload);
+        renderSettings();
+      } catch (error) {
+        toast(error.message, "error");
+        renderSettings();
+      }
+    }
+
+    $("#signature-include-name").addEventListener("click", () => {
+      if ($("#signature-include-name").disabled) return;
+      saveSignatureOptions({ include_name: $("#signature-include-name").getAttribute("aria-checked") !== "true" });
+    });
+    $("#signature-include-datetime").addEventListener("click", () => {
+      if ($("#signature-include-datetime").disabled) return;
+      saveSignatureOptions({ include_datetime: $("#signature-include-datetime").getAttribute("aria-checked") !== "true" });
+    });
+    let nameTimer = 0;
+    $("#signature-name").addEventListener("input", () => {
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(() => saveSignatureOptions({ signer_name: $("#signature-name").value }), 400);
+    });
+    $("#signature-name").addEventListener("change", () => {
+      clearTimeout(nameTimer);
+      saveSignatureOptions({ signer_name: $("#signature-name").value });
+    });
+
+    $("#signature-remove").addEventListener("click", () => {
+      ui.confirmSignature = true;
+      renderSettings();
+      $("#signature-remove-no").focus();
+    });
+
+    $("#signature-remove-no").addEventListener("click", () => {
+      ui.confirmSignature = false;
+      renderSettings();
+      $("#signature-remove").focus();
+    });
+
+    $("#signature-remove-yes").addEventListener("click", async () => {
+      try {
+        ui.settings = await withBusy($("#signature-remove-yes"), "Removing…", () => post("/api/signature/remove", {}));
+        ui.confirmSignature = false;
+        toast("Signature removed", "success");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+      renderSettings();
+    });
+
+    /* ---------- Logs ---------- */
+    /* The drawer shows one log at a time: a run's (by run ID) or the latest session check's. */
+    const logsUi = { open: false, target: null, epoch: null, after: 0, lines: [], meta: {}, follow: true, timer: null, opener: null, polling: false, shot: "" };
+    const logTime = (at) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    const logsLive = (target) => target === "session"
+      ? Boolean(ui.data?.session?.checking)
+      : running() && ui.data?.current_run?.run_id === target;
+
+    /* The top block offers the running run's log, or the failed run's while its alert shows. */
+    function renderLogsButtons() {
+      const session = ui.data?.session || {};
+      const button = $("#logs-btn");
+      button.dataset.logsRun = ui.logsRun || "";
+      setLogsButton(button, Boolean(ui.logsRun), running());
+      setLogsButton($("#session-logs"), Boolean(session.has_logs || session.checking), Boolean(session.checking));
+      if (logsUi.open && logsLive(logsUi.target) && !logsUi.meta.active) pollLogs();
+    }
+
+    function setLogsButton(button, show, live) {
+      button.hidden = !show;
+      const dot = button.querySelector(".live-dot");
+      if (live && !dot) button.insertAdjacentHTML("beforeend", '<span class="live-dot" aria-hidden="true"></span>');
+      if (!live && dot) dot.remove();
+    }
+
+    function openLogs(target) {
+      const panel = $("#logs");
+      if (!logsUi.open) logsUi.opener = document.activeElement;
+      if (target !== logsUi.target) {
+        closeShot();
+        Object.assign(logsUi, { target, epoch: null, after: 0, lines: [], meta: {} });
+        $("#logs-body").innerHTML = "";
+        renderLogsHead();
+      }
+      logsUi.open = true;
+      logsUi.follow = true;
+      document.documentElement.classList.add("is-logs-open");
+      panel.classList.remove("is-leaving");
+      panel.hidden = false;
+      $("#logs-backdrop").hidden = false;
+      $("#logs-close").focus();
+      pollLogs();
+    }
+
+    function closeLogs() {
+      if (!logsUi.open) return;
+      closeShot();
+      logsUi.open = false;
+      document.documentElement.classList.remove("is-logs-open");
+      clearTimeout(logsUi.timer);
+      $("#logs-backdrop").hidden = true;
+      const panel = $("#logs");
+      panel.classList.add("is-leaving");
+      panel.addEventListener("animationend", () => {
+        if (logsUi.open) return;
+        panel.hidden = true;
+        panel.classList.remove("is-leaving");
+      }, { once: true });
+      if (logsUi.opener?.isConnected && !logsUi.opener.hidden) logsUi.opener.focus();
+    }
+
+    async function pollLogs() {
+      clearTimeout(logsUi.timer);
+      if (!logsUi.open || logsUi.polling) return;
+      logsUi.polling = true;
+      const target = logsUi.target;
+      const query = target === "session" ? "session=1" : `run=${encodeURIComponent(target)}`;
+      try {
+        const response = await fetch(`/api/logs?${query}&after=${logsUi.after}`, { cache: "no-store" });
+        if (response.ok && target === logsUi.target) renderLogs(await response.json());
+      } catch { /* the header already shows the connection state */ }
+      logsUi.polling = false;
+      if (logsUi.open) logsUi.timer = setTimeout(pollLogs, logsUi.meta.active ? 1000 : 3000);
+    }
+
+    function renderLogs(data) {
+      const body = $("#logs-body");
+      if (data.epoch !== logsUi.epoch) {
+        if (logsUi.after) {
+          /* The session check started over: read its new log from the top on the next poll. */
+          Object.assign(logsUi, { epoch: null, after: 0, lines: [], follow: true });
+          body.innerHTML = "";
+          clearTimeout(logsUi.timer);
+          logsUi.timer = setTimeout(pollLogs, 0);
+          return;
+        }
+        logsUi.epoch = data.epoch;
+      }
+      logsUi.meta = data;
+      const animate = logsUi.lines.length > 0;
+      if (data.lines.length) {
+        logsUi.after = data.lines.at(-1).seq;
+        logsUi.lines.push(...data.lines);
+        body.querySelector(".logs-empty")?.remove();
+        body.insertAdjacentHTML("beforeend", data.lines.map((line) =>
+          `<li class="log is-${esc(line.level)}${animate ? " is-new" : ""}"><time datetime="${esc(line.at)}">${logTime(line.at)}</time><span>${esc(line.text)}</span>${logShot(line)}</li>`).join(""));
+        while (body.children.length > 3000) body.firstElementChild.remove();
+      }
+      if (!logsUi.lines.length) {
+        body.innerHTML = `<li class="logs-empty">${data.active ? "Waiting for output…" : "No logs recorded."}</li>`;
+      }
+      renderLogsHead();
+      if (logsUi.follow) body.scrollTop = body.scrollHeight;
+      $("#logs-jump").hidden = logsUi.follow || !logsUi.lines.length;
+    }
+
+    function logShot(line) {
+      if (!line.image || logsUi.target === "session") return "";
+      const url = `/logs/shot?run=${encodeURIComponent(logsUi.target)}&name=${encodeURIComponent(line.image)}`;
+      return `<figure class="log-shot">
+        <button type="button" data-open-shot="${esc(url)}" aria-label="View the screenshot">
+          <img src="${esc(url)}" alt="The report as it looked when this export failed" loading="lazy">
+        </button>
+        <figcaption>Screen at the moment of failure · click to enlarge</figcaption>
+      </figure>`;
+    }
+
+    function openShot(url) {
+      logsUi.shot = url;
+      $("#shot-image").src = url;
+      $("#shot-view").hidden = false;
+      $("#shot-close").focus();
+    }
+
+    function closeShot() {
+      if (!logsUi.shot) return;
+      logsUi.shot = "";
+      $("#shot-view").hidden = true;
+      $("#shot-image").removeAttribute("src");
+    }
+
+    function renderLogsHead() {
+      const target = logsUi.target;
+      $("#logs-title").innerHTML = target === "session" ? "Power BI session" : runIdButton(target);
+      const last = logsUi.lines.at(-1);
+      $("#logs-sub").innerHTML = logsUi.meta.active
+        ? '<span class="live-dot" aria-hidden="true"></span>Live'
+        : last ? `Finished · ${esc(when(last.at))}` : "";
+      $("#logs-copy").disabled = !logsUi.lines.length;
+    }
+
+    $("#logs-body").addEventListener("scroll", () => {
+      const body = $("#logs-body");
+      logsUi.follow = body.scrollHeight - body.scrollTop - body.clientHeight < 24;
+      $("#logs-jump").hidden = logsUi.follow || !logsUi.lines.length;
+    });
+    $("#logs-jump").addEventListener("click", () => {
+      const body = $("#logs-body");
+      logsUi.follow = true;
+      body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+      $("#logs-jump").hidden = true;
+    });
+    $("#logs-close").addEventListener("click", closeLogs);
+    $("#logs-backdrop").addEventListener("click", closeLogs);
+    $("#logs-backdrop").addEventListener("wheel", (event) => event.preventDefault(), { passive: false });
+    $("#logs-backdrop").addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+    $("#shot-close").addEventListener("click", closeShot);
+    $("#logs-copy").addEventListener("click", async () => {
+      const heading = logsUi.target === "session" ? "Power BI session" : `Run ${logsUi.target}`;
+      try {
+        await navigator.clipboard.writeText([heading, ...logsUi.lines.map((line) => `${logTime(line.at)}  ${line.text}${line.image ? " [screenshot]" : ""}`)].join("\n"));
+        toast("Logs copied");
+      } catch {
+        toast("Could not copy the logs", "error");
+      }
+    });
+    document.addEventListener("click", (event) => {
+      const shot = event.target.closest("[data-open-shot]");
+      if (shot) {
+        openShot(shot.dataset.openShot);
+        return;
+      }
+      const button = event.target.closest("[data-open-logs]");
+      if (!button) return;
+      const target = "logsSession" in button.dataset ? "session" : button.dataset.logsRun;
+      if (target) openLogs(target);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || ui.stepsOpen) return;
+      if (logsUi.shot) { closeShot(); event.preventDefault(); return; }
+      if (logsUi.open) closeLogs();
+    }, true);
+
+    renderSkeletons();
+    route();
+    refresh();
+    setInterval(refresh, 2500);
+    setInterval(() => { if (running()) renderStatus(); }, 1000);
+  </script>
+</body>
+</html>
