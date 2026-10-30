@@ -26,4 +26,4 @@ openbox >/dev/null 2>&1 &
 x11vnc -display "${DISPLAY:-:99}" -localhost -forever -shared -nopw -quiet -xkb -noxdamage -wait 10 &
 websockify --web=/usr/share/novnc 6080 localhost:5900 >/dev/null 2>&1 &
 
-exec python -u server.p
+exec python -u server.py
