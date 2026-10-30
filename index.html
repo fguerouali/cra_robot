@@ -2000,13 +2000,31 @@
       renderHeader();
       renderSettings();
       try {
-        const result = await withBusy(button, "Waiting for sign-in…", () => post("/api/session/signin", {}));
-        if (ui.settings) ui.settings = result;
-        const online = result.session?.status === "healthy";
-        toast(online ? "Signed in · Power BI session is online" : "Still logged out — sign-in was not completed", online ? "success" : "error");
+        await post("/api/session/signin", {});
       } catch (error) {
         toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
+        ui.signingIn = false;
+        closeSignInScreen();
+        await refresh();
+        renderSettings();
+        return;
       }
+      const deadline = Date.now() + 11 * 60 * 1000;
+      let online = false;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          const response = await fetch("/api/state", { cache: "no-store" });
+          if (!response.ok) continue;
+          const data = await response.json();
+          render(data);
+          const session = data.session || {};
+          if (session.checking && session.task === "signin") continue;
+          online = session.status === "healthy";
+          break;
+        } catch { /* the sign-in screen stays open while the server catches up */ }
+      }
+      toast(online ? "Signed in · Power BI session is online" : "Still logged out — sign-in was not completed", online ? "success" : "error");
       ui.signingIn = false;
       closeSignInScreen();
       await refresh();

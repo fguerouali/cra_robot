@@ -503,6 +503,27 @@ def _signin_url() -> str:
     return os.getenv("SIGNIN_URL", "").strip()
 
 
+def _finish_sign_in() -> None:
+    """Run the visible sign-in off the request so the browser tab is not tied to one long HTTP call."""
+    global _checking, _session_task
+    _log_begin(SESSION_LOG, fresh=True)
+    log("Signing in to Power BI", "step")
+    try:
+        outcome = sign_in()
+        if outcome["status"] == "healthy":
+            log("Online · exports can run without you", "ok")
+        else:
+            log(f"Still logged out · {outcome['detail']}", "error")
+    except Exception as exc:
+        traceback.print_exc()
+        log(f"Could not sign in · {public_message(exc)}", "error")
+    finally:
+        _log_end()
+        with _lock:
+            _checking = False
+            _session_task = ""
+
+
 def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
     """Session check, session cut-off and purges; all of them need the exporter to be idle."""
     global _checking, _session_task
@@ -522,24 +543,8 @@ def _settings_action(path: str, payload: dict) -> tuple[int, dict]:
             _checking = True
             _session_task = path.rsplit("/", 1)[-1]
     if path == "/api/session/signin":
-        _log_begin(SESSION_LOG, fresh=True)
-        log("Signing in to Power BI", "step")
-        try:
-            outcome = sign_in()
-            if outcome["status"] == "healthy":
-                log("Online · exports can run without you", "ok")
-            else:
-                log(f"Still logged out · {outcome['detail']}", "error")
-        except Exception as exc:
-            traceback.print_exc()
-            message = public_message(exc)
-            log(f"Could not sign in · {message}", "error")
-            return 500, {"error": message}
-        finally:
-            _log_end()
-            with _lock:
-                _checking = False
-                _session_task = ""
+        threading.Thread(target=_finish_sign_in, name="sign-in", daemon=True).start()
+        return 200, _settings()
     elif path == "/api/session/cutoff":
         _log_begin(SESSION_LOG, fresh=True)
         log("Logging out of Power BI" if method == "sign_out" else "Deleting the saved sign-in", "step")
