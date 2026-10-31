@@ -105,7 +105,9 @@ def _vnc_shell(header: bytes) -> bytes:
     """The picture is Power BI. Clicks and keys on it are forwarded into Chrome, so Authenticator can be used."""
     path = header.split(b"\r\n", 1)[0].split(b" ")[1]
     query = path.split(b"?", 1)[1].decode("ascii", "ignore") if b"?" in path else ""
-    src = "/vnc/vnc_embed.html" + (("?" + query) if query else "")
+    if not query:
+        query = "autoconnect=1&resize=scale&quality=2&compression=9"
+    src = "/vnc/vnc_embed.html?" + query
     src = src.replace("&", "&amp;").replace('"', "&quot;")
     page = """<!DOCTYPE html>
 <html lang="fr">
@@ -115,16 +117,16 @@ def _vnc_shell(header: bytes) -> bytes:
 <title>Connexion Power BI</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; color: #111; }
-  #hint { position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 4; margin: 0;
-    display: flex; align-items: center; padding: 0 12px; box-sizing: border-box;
-    background: #f5c518; font: 600 14px/1.2 sans-serif; }
-  iframe, #pad { position: fixed; top: 36px; left: 0; width: 100%; height: calc(100% - 36px); border: 0; background: #000; }
+  #hint { position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 4; margin: 0;
+    display: flex; align-items: center; padding: 0 14px; box-sizing: border-box;
+    background: #f5c518; font: 700 16px/1.2 sans-serif; }
+  iframe, #pad { position: fixed; top: 52px; left: 0; width: 100%; height: calc(100% - 52px); border: 0; background: #000; }
   iframe { pointer-events: none; }
   #pad { z-index: 3; background: transparent; outline: none; cursor: default; }
 </style>
 </head>
 <body>
-<p id="hint">Clique dans l'image et tape au clavier. L'Authenticator se fait ici.</p>
+<p id="hint">Power BI s'ouvre. L'écran noir n'est pas la page de connexion.</p>
 <iframe src="__SRC__" title="Power BI"></iframe>
 <div id="pad" tabindex="0"></div>
 <script>
@@ -181,6 +183,26 @@ def _vnc_shell(header: bytes) -> bytes:
     sendKey(event, false);
   });
   pad.focus();
+  function openPowerBI() {
+    fetch("/api/state", { cache: "no-store" }).then(function (response) { return response.json(); }).then(function (data) {
+      var session = (data && data.session) || {};
+      if (session.checking && session.task === "signin") {
+        hint.textContent = "Clique dans l'image et tape au clavier. L'Authenticator se fait ici.";
+        return;
+      }
+      hint.textContent = "Ouverture de Power BI…";
+      return fetch("/api/session/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      }).then(function () {
+        hint.textContent = "Clique dans l'image et tape au clavier. L'Authenticator se fait ici.";
+      });
+    }).catch(function () {
+      hint.textContent = "Recharge la page CRA, puis clique Sign in.";
+    });
+  }
+  openPowerBI();
 })();
 </script>
 </body>
@@ -217,7 +239,7 @@ def _handle(client: socket.socket) -> None:
             _reply(client, "200 OK", b'{"name":"novnc","version":"1.3.0"}\n', "application/json")
             client.close()
             return
-        if request[:1] == [b"GET"] and raw == b"/vnc/vnc.html":
+        if request[:1] == [b"GET"] and raw in (b"/vnc/vnc.html", b"/signin"):
             _reply(client, "200 OK", _vnc_shell(header), "text/html; charset=utf-8")
             client.close()
             return

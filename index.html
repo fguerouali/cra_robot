@@ -1167,7 +1167,7 @@
       return session.status === "signed_out" || session.has_profile === false;
     };
     const signingIn = () => Boolean(ui.signingIn || (ui.data?.session?.checking && ui.data.session.task === "signin"));
-    const signinUrl = () => String((ui.settings && ui.settings.signin_url) || (ui.data && ui.data.signin_url) || "").replaceAll("{host}", location.hostname).replaceAll("{origin}", location.origin);
+    const signinUrl = () => location.origin + "/signin";
     const openSignInScreen = () => {
       const url = signinUrl();
       if (!url) return;
@@ -2014,12 +2014,21 @@
       try {
         await withBusy(button, "Ouverture…", () => post("/api/session/signin", {}));
       } catch (error) {
-        toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
-        ui.signingIn = false;
-        closeSignInScreen();
-        await refresh();
-        renderSettings();
-        return;
+        let already = false;
+        try {
+          const response = await fetch("/api/state", { cache: "no-store" });
+          const data = response.ok ? await response.json() : {};
+          const session = data.session || {};
+          already = Boolean(session.checking && session.task === "signin");
+        } catch { /* the window stays open only when sign-in is really running */ }
+        if (!already) {
+          toast(error.message, "error", { label: "View logs", run: () => openLogs("session") });
+          ui.signingIn = false;
+          closeSignInScreen();
+          await refresh();
+          renderSettings();
+          return;
+        }
       }
       const deadline = Date.now() + 11 * 60 * 1000;
       let online = false;
