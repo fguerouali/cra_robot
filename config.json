@@ -2,12 +2,59 @@
   "resources": [
     {
       "name": "Ilyass ELGHAZI",
-      "excluded": false
+      "excluded": true,
+      "projects": []
     },
     {
       "name": "Faycal Guerouali",
-      "excluded": false
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "OTHMANE OUTAMA",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "Abdelkarim ELAMEL",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "Mohammed Ahouzi",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "Ahmed Bennajeh",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "Meriem AItouaziz",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "hajar dami",
+      "excluded": true,
+      "projects": []
+    },
+    {
+      "name": "YASSIR elouarma",
+      "excluded": false,
+      "projects": [
+        "Gestion de l'activit\u00e9 delivery (Socle Technique)",
+        "Maintenance Evolutive Enablers",
+        "R\u00e9\u00e9valuation automatique des conditions tarifaires",
+        "Simulation (Socle technique)"
+      ]
     }
   ],
-  "month_value": "10/2026"
+  "month_value": "09/2026",
+  "signature": {
+    "signer_name": "Fay\u00e7al Guerouali",
+    "include_name": true,
+    "include_datetime": true
+  }
 }

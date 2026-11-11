@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import time
 import unicodedata
 from calendar import month_name
@@ -33,19 +34,44 @@ SIGN_IN_URLS = ("login.microsoftonline.com", "login.live.com", "login.windows.ne
 RESOURCE_FILTER = "Ressource"
 MONTH_FILTER = "Mois_Année"
 WEEK_FILTER = "Num_Semaine"
+PROJECT_FILTER = "Projet"
 FILTER_LABELS = {
     RESOURCE_FILTER: "the resource list",
     MONTH_FILTER: "the month list",
     WEEK_FILTER: "the week list",
+    PROJECT_FILTER: "the project list",
 }
 PAGE_MENSUEL = "Mensuel"
 PAGE_HEBDOMADAIRE = "Hebdomadaire"
 PAGE_LABELS = {PAGE_MENSUEL: "monthly", PAGE_HEBDOMADAIRE: "weekly"}
-PDF_BUTTON = (By.ID, "pdf")
-CURRENT_PAGE = (By.CSS_SELECTOR, 'input[aria-label="Only export current page"]')
-CLEAR_BUTTON_XPATH = (
-    ".//button[@aria-label='Clear filter' and not(@disabled) and not(@aria-disabled='true')]"
+CURRENT_PAGE_LABELS = ("only export current page", "exporter uniquement la page active")
+_PDF_ITEM_LABELS = (
+    "pdf",
+    "pdf (.pdf)",
+    "fichier pdf",
+    "export to pdf",
+    "exporter au format pdf",
+    "exporter en pdf",
 )
+CLEAR_BUTTON_XPATH = (
+    ".//button[contains(@class, 'pbi-glyph-eraser') and not(@disabled) and not(@aria-disabled='true')]"
+)
+_SELECT_ALL = {"select all", "sélectionner tout"}
+
+
+_stop_run = threading.Event()
+
+
+def stop_requested() -> bool:
+    return _stop_run.is_set()
+
+
+def mark_stop() -> None:
+    _stop_run.set()
+
+
+def clear_stop() -> None:
+    _stop_run.clear()
 
 
 def say(message: str) -> None:
@@ -70,27 +96,36 @@ def workflow(
     resource_name: str,
     month_value: str,
     stamp: dict | None = None,
+    projects: list[str] | None = None,
 ) -> list[Path]:
     output_folder = _output_folder(resource_name, month_value)
     file_stem = _file_stem(resource_name, month_value)
     started = time.time()
     try:
         month = month_label(month_value)
+        chosen = [project for project in (projects or []) if project]
         say("Opening Power BI")
         driver.get("https://app.powerbi.com/home")
         _wait_for_sign_in(driver)
         _open_cra_report(driver)
         _open_report_page(driver, PAGE_MENSUEL)
         _set_resource_month(driver, resource_name, month_value)
-        say(f"Showing {resource_name} for {month}")
+        applied = _apply_projects(driver, chosen)
+        scope = f" · {', '.join(applied)}" if applied else ""
+        say(f"Showing {resource_name} for {month}{scope}")
         say("Downloading the monthly PDF")
         saved = [_export_current_page(driver, output_folder, file_stem)]
+        if stop_requested():
+            raise RuntimeError("Stopped")
         _open_report_page(driver, PAGE_HEBDOMADAIRE)
         _set_resource_month(driver, resource_name, month_value)
+        _apply_projects(driver, chosen, announce=False)
         week_values = _week_values(driver)
         say(f"Found {len(week_values)} week{'s' if len(week_values) != 1 else ''} in {month}")
         weeks = []
         for number, week in enumerate(week_values, start=1):
+            if stop_requested():
+                raise RuntimeError("Stopped")
             _select_only_week(driver, week)
             say(f"Downloading week {week} ({number} of {len(week_values)})")
             weeks.append(_export_current_page(driver, output_folder, file_stem, week))
@@ -294,6 +329,77 @@ def _open_report_page(driver: WebDriver, name: str) -> None:
     say(f"Opened the {PAGE_LABELS.get(name, name)} report")
 
 
+def _control_script() -> str:
+    """The ribbon button's accessible name is PDF. 'Plus d'options' is the app launcher, not this button."""
+    return """
+        const wanted = arguments[0];
+        const norm = (value) => (value || '')
+          .replace(/[\\u2019\\u2018]/g, "'")
+          .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+          .replace(/\\s+/g, ' ').trim().toLowerCase();
+        const visible = (el) => {
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          return rect.width > 4 && rect.height > 4 && style.visibility !== 'hidden' && style.display !== 'none';
+        };
+        const line = (el) => norm((el.innerText || el.textContent || '').split('\\n')[0]);
+        const access = (el) => norm(el.getAttribute('aria-label') || el.getAttribute('title') || '');
+        const nodes = [...document.querySelectorAll('button, [role="button"], [role="menuitem"]')].filter(visible);
+        for (const node of nodes) {
+          const caption = line(node);
+          const name = access(node);
+          if (node.id === 'pdf' || caption === 'pdf' || wanted.includes(caption) || wanted.includes(name)) return node;
+          if (name === 'pdf' || name.endsWith(' pdf') || name.includes('export to pdf') || name.includes('exporter au format pdf') || name.includes('exporter en pdf')) return node;
+        }
+        return null;
+    """
+
+
+def _find_pdf_item(driver: WebDriver) -> WebElement | None:
+    try:
+        found = driver.execute_script(_control_script(), list(_PDF_ITEM_LABELS))
+    except WebDriverException:
+        found = None
+    if found is not None:
+        return found
+    for element in driver.find_elements(By.ID, "pdf"):
+        try:
+            if element.is_displayed():
+                return element
+        except WebDriverException:
+            continue
+    return None
+
+
+def _ribbon_overflow(driver: WebDriver) -> WebElement | None:
+    """The ribbon hides PDF when the window is narrow. This is that overflow, not the app launcher."""
+    try:
+        button = driver.find_element(By.ID, "RibbonOverflowMenu-overflow")
+    except WebDriverException:
+        return None
+    try:
+        return button if button.is_displayed() else None
+    except WebDriverException:
+        return None
+
+
+def _wait_pdf_button(driver: WebDriver, timeout: float = 20) -> WebElement:
+    """The ribbon button is #pdf, caption PDF. A narrow window parks it in the ribbon overflow."""
+    deadline = time.monotonic() + timeout
+    opened = False
+    while time.monotonic() < deadline:
+        found = _find_pdf_item(driver)
+        if found is not None:
+            return found
+        if not opened:
+            overflow = _ribbon_overflow(driver)
+            if overflow is not None:
+                _js_click(driver, overflow, "the Export menu")
+                opened = True
+        time.sleep(0.4)
+    raise RuntimeError("Could not click the Export to PDF button. It did not appear in time.")
+
+
 def _export_current_page(
     driver: WebDriver,
     output_folder: Path,
@@ -301,20 +407,15 @@ def _export_current_page(
     week: str | None = None,
 ) -> Path:
     DOWNLOADS.mkdir(exist_ok=True)
-    try:
-        pdf_button = WebDriverWait(driver, 60).until(EC.presence_of_element_located(PDF_BUTTON))
-    except TimeoutException:
-        raise RuntimeError("Could not click the Export to PDF button. It did not appear in time.") from None
+    pdf_button = _wait_pdf_button(driver)
     _js_click(driver, pdf_button, "the Export to PDF button")
     try:
-        checkbox = WebDriverWait(driver, 20).until(EC.presence_of_element_located(CURRENT_PAGE))
+        checkbox = WebDriverWait(driver, 20).until(lambda d: _current_page_box(d))
     except TimeoutException:
         raise RuntimeError("Could not click the current page option. It did not appear in time.") from None
-    if (checkbox.get_attribute("aria-checked") or "").lower() != "true":
+    if _box_checked(checkbox) != "true":
         _js_click(driver, checkbox, "the current page option")
-        WebDriverWait(driver, 10).until(
-            lambda d: (d.find_element(*CURRENT_PAGE).get_attribute("aria-checked") or "").lower() == "true"
-        )
+        WebDriverWait(driver, 10).until(lambda d: _box_checked(_current_page_box(d)) == "true")
     started = time.time()
     _click(_export_button(driver), "the Export button")
     debug(f"Export started for {f'week {week}' if week else 'the month'}")
@@ -324,12 +425,54 @@ def _export_current_page(
 
 
 def _export_button(driver: WebDriver) -> WebElement:
-    checkbox = driver.find_element(*CURRENT_PAGE)
-    container = checkbox.find_element(By.XPATH, "ancestor::*[.//button[normalize-space()='Export']][1]")
-    for button in container.find_elements(By.XPATH, ".//button[normalize-space()='Export']"):
-        if button.is_displayed():
-            return button
+    for element in driver.find_elements(By.ID, "okButton"):
+        if element.is_displayed():
+            return element
+    for text in ("Export", "Exporter"):
+        for element in driver.find_elements(By.XPATH, f"//button[normalize-space()='{text}']"):
+            if element.is_displayed():
+                return element
     raise RuntimeError("Power BI's export window did not show an Export button. Try again in a moment.")
+
+
+def _current_page_box(driver: WebDriver) -> WebElement | None:
+    """The 'current page only' checkbox. Power BI labels it in the browser's language."""
+    return driver.execute_script(
+        """
+        const wanted = arguments[0];
+        const norm = (value) => (value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+        const labelled = document.querySelector(
+          'input[aria-label="Only export current page"], input[aria-label="Exporter uniquement la page active"]'
+        );
+        if (labelled) return labelled;
+        for (const node of document.querySelectorAll('label')) {
+          if (!wanted.includes(norm(node.innerText))) continue;
+          const root = node.closest('div') || node.parentElement;
+          return node.querySelector('input, [role="checkbox"]')
+            || (root && root.querySelector('input, [role="checkbox"]'))
+            || node;
+        }
+        return null;
+        """,
+        list(CURRENT_PAGE_LABELS),
+    )
+
+
+def _box_checked(element: WebElement | None) -> str:
+    if element is None:
+        return ""
+    value = (element.get_attribute("aria-checked") or "").lower()
+    if value:
+        return value
+    try:
+        host = element.find_element(By.XPATH, "ancestor-or-self::*[@aria-checked][1]")
+    except WebDriverException:
+        return ""
+    return (host.get_attribute("aria-checked") or "").lower()
+
+
+def _is_select_all(text: str) -> bool:
+    return text.casefold() in _SELECT_ALL
 
 
 def _safe_segment(value: str) -> str:
@@ -396,6 +539,56 @@ def _set_resource_month(driver: WebDriver, resource_name: str, month_value: str)
     _clear_filter(driver, WEEK_FILTER)
 
 
+def _apply_projects(driver: WebDriver, projects: list[str], announce: bool = True) -> list[str]:
+    """Limit the Projet slicer to the projects that exist. Missing names are skipped.
+
+    An empty list, or a list whose names are all absent, exports every project.
+    """
+    if not projects:
+        _clear_filter(driver, PROJECT_FILTER)
+        return []
+    available = [project for project in projects if _project_is_listed(driver, project)]
+    for project in projects:
+        if announce and project not in available:
+            say(f"Skipping {project} · not in the Projet filter")
+    if not available:
+        _clear_filter(driver, PROJECT_FILTER)
+        if announce:
+            say("No chosen project is in the report. Exporting every project.")
+        return []
+    selected: list[str] = []
+    for project in available:
+        try:
+            if not selected:
+                _select_only_filter_value(driver, PROJECT_FILTER, project, search=True)
+            else:
+                _add_filter_value(driver, PROJECT_FILTER, project)
+        except RuntimeError:
+            if announce:
+                say(f"Skipping {project} · not in the Projet filter")
+            continue
+        selected.append(project)
+    if not selected:
+        _clear_filter(driver, PROJECT_FILTER)
+        if announce:
+            say("No chosen project is in the report. Exporting every project.")
+    return selected
+
+
+def _project_is_listed(driver: WebDriver, value: str) -> bool:
+    """Search the Projet slicer once. A missing name returns immediately instead of failing the export."""
+    card = _expand_filter(driver, PROJECT_FILTER)
+    _search_filter(card, max(value.split(), key=len))
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        if _value_row(_filter_card(driver, PROJECT_FILTER), value) is not None:
+            _clear_search(_filter_card(driver, PROJECT_FILTER))
+            return True
+        time.sleep(0.3)
+    _clear_search(_filter_card(driver, PROJECT_FILTER))
+    return False
+
+
 def _clear_filter_button(card: WebElement | None) -> WebElement | None:
     """That filter card's own eraser, only when Power BI has it turned on."""
     if card is None:
@@ -440,7 +633,7 @@ def _week_values(driver: WebDriver) -> list[str]:
                 driver.execute_script("arguments[0].scrollTop = 0", region)
         before = len(seen)
         for text, _, _ in _week_rows(driver):
-            if text and text.casefold() != "select all" and text not in seen:
+            if text and not _is_select_all(text) and text not in seen:
                 seen.append(text)
         if region is not None:
             driver.execute_script(
@@ -472,6 +665,8 @@ def _week_rows(driver: WebDriver) -> list[tuple[str, str, WebElement]]:
 def _wait_for_pdf(started: float) -> Path:
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
+        if stop_requested():
+            raise RuntimeError("Stopped")
         pending = list(DOWNLOADS.glob("*.crdownload")) + list(DOWNLOADS.glob("*.tmp"))
         fresh = [path for path in DOWNLOADS.glob("*.pdf") if path.stat().st_mtime >= started - 1]
         if fresh and not pending:
@@ -492,6 +687,8 @@ def _select_only_filter_value(driver: WebDriver, filter_name: str, value: str, s
     except TimeoutException:
         if filter_name == MONTH_FILTER:
             raise RuntimeError(f"{month_label(value)} is not available in the report.") from None
+        if filter_name == PROJECT_FILTER:
+            raise RuntimeError(f"'{value}' is not listed in the Projet filter. Check the spelling on this resource.") from None
         hint = _similar_values(driver, filter_name, value) if search else []
         detail = f" Similar names: {', '.join(hint)}." if hint else ""
         raise RuntimeError(f"This name is not listed in the report. Check the spelling in Resources.{detail}") from None
@@ -512,6 +709,44 @@ def _select_only_filter_value(driver: WebDriver, filter_name: str, value: str, s
     debug(f"{filter_name}: selected '{value}'")
 
 
+def _add_filter_value(driver: WebDriver, filter_name: str, value: str) -> None:
+    """Check one more value without clearing the ones already chosen."""
+    label = FILTER_LABELS.get(filter_name, filter_name)
+    card = _expand_filter(driver, filter_name)
+    _search_filter(card, max(value.split(), key=len))
+    try:
+        row = WebDriverWait(driver, 20).until(lambda d: _value_row(_filter_card(d, filter_name), value))
+    except TimeoutException:
+        raise RuntimeError(f"'{value}' is not listed in the Projet filter. Check the spelling on this resource.") from None
+    if not _row_checked(row):
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", row)
+        try:
+            _click(row, f"{value} in {label}")
+        except RuntimeError:
+            row = _value_row(_filter_card(driver, filter_name), value)
+            if row is None:
+                raise
+            _js_click(driver, row, f"{value} in {label}")
+    _clear_search(_filter_card(driver, filter_name))
+    try:
+        WebDriverWait(driver, 20).until(lambda d: _row_checked(_value_row(_filter_card(d, filter_name), value)))
+    except TimeoutException:
+        raise RuntimeError(f"Could not select {value} in {label}.") from None
+    debug(f"{filter_name}: added '{value}'")
+
+
+def _row_checked(row: WebElement | None) -> bool:
+    if row is None:
+        return False
+    try:
+        if (row.get_attribute("aria-checked") or "").lower() == "true":
+            return True
+        box = row.find_elements(By.CSS_SELECTOR, "[aria-checked='true']")
+        return bool(box)
+    except StaleElementReferenceException:
+        return False
+
+
 def _filter_item_rows(driver: WebDriver, filter_name: str) -> list[tuple[str, str, WebElement]]:
     try:
         card = _expand_filter(driver, filter_name)
@@ -530,7 +765,13 @@ def _expand_filter(driver: WebDriver, filter_name: str) -> WebElement:
     card = _filter_card(driver, filter_name)
     if card.find_elements(By.CSS_SELECTOR, ".cardExpanded"):
         return card
-    button = card.find_element(By.CSS_SELECTOR, 'button[aria-label$="Expand or collapse filter card"]')
+    buttons = card.find_elements(
+        By.CSS_SELECTOR,
+        "button.collapse, button[aria-label$='Expand or collapse filter card'], button[aria-label$='Développer ou réduire la carte de filtre']",
+    )
+    if not buttons:
+        raise RuntimeError(f"Could not open {FILTER_LABELS.get(filter_name, filter_name)}.")
+    button = buttons[0]
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", button)
     _click(button, FILTER_LABELS.get(filter_name, filter_name))
     WebDriverWait(driver, 20).until(lambda d: _filter_card(d, filter_name).find_elements(By.CSS_SELECTOR, ".cardExpanded"))
@@ -574,7 +815,7 @@ def _search_filter(card: WebElement, text: str) -> None:
     driver = card.parent
     box = _clear_search(card)
     if box is None:
-        raise RuntimeError("The report's resource list has no search box.")
+        raise RuntimeError("This filter has no search box.")
     box.send_keys(text)
     WebDriverWait(driver, 5).until(lambda d: box.get_attribute("value") == text)
 
@@ -611,7 +852,7 @@ def _similar_values(driver: WebDriver, filter_name: str, value: str, limit: int 
         time.sleep(1.5)
         for label in _filter_card(driver, filter_name).find_elements(By.CSS_SELECTOR, "div.slicerItemContainer span.slicerText"):
             text = label.text.strip()
-            if text and text.casefold() != "select all":
+            if text and not _is_select_all(text):
                 found.setdefault(_normalized(text), text)
     _clear_search(_filter_card(driver, filter_name))
     close = get_close_matches(_normalized(value), list(found), n=limit, cutoff=0.4)

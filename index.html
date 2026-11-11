@@ -430,18 +430,37 @@
     .add-form { display: flex; gap: 8px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
     .res-list { padding: 8px; }
     .res-row {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
-      height: 60px; padding: 0 12px; border-radius: var(--radius);
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px;
+      min-height: 60px; height: auto; padding: 10px 12px; border-radius: var(--radius);
     }
+    .res-row.is-projects { align-items: start; }
     .res-row:hover { background: var(--surface-muted); }
     .res-name, .res-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .res-name { font-weight: 600; }
     .res-meta { margin-top: 2px; color: var(--text-tertiary); font-size: 12px; line-height: 16px; }
+    .res-meta .link { font-size: 12px; }
     .res-row.is-excluded .res-name { color: var(--text-tertiary); }
     .res-tools { display: flex; align-items: center; gap: 4px; }
     .res-edit { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; }
     .res-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
     .res-confirm-text { color: var(--danger); font-size: 13px; font-weight: 600; }
+    .res-projects { grid-column: 1 / -1; display: grid; gap: 8px; padding-bottom: 4px; }
+    .res-project-add { display: flex; gap: 8px; }
+    .res-project-add .input { flex: 1; min-width: 0; }
+    .res-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .res-chip {
+      display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+      padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--surface); color: var(--text); font-size: 12px; font-weight: 600;
+    }
+    .res-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .res-chip button {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%;
+      background: transparent; color: var(--text-tertiary); cursor: pointer; font: 600 14px/1 inherit;
+    }
+    .res-chip button:hover { background: var(--surface-muted); color: var(--text); }
+    .res-chip button:disabled { opacity: 0.5; cursor: not-allowed; }
     .card-foot { padding: 12px 20px 16px; border-top: 1px solid var(--border); color: var(--text-tertiary); font-size: 12px; }
 
     /* Switch */
@@ -674,6 +693,7 @@
               <span id="run-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
               <span id="run-label">Run</span>
             </button>
+            <button class="btn btn-danger" id="stop-btn" type="button" hidden>Stop</button>
           </form>
         </div>
         <form class="signin-creds" id="signin-creds" hidden>
@@ -748,7 +768,7 @@
             </button>
           </form>
           <ul class="res-list panel-body" id="res-list"></ul>
-          <p class="card-foot">Names must match the report's Ressource filter.</p>
+          <p class="card-foot">Names must match the report's Ressource filter. Projects are optional and match the Projet filter.</p>
         </aside>
       </div>
     </div>
@@ -933,6 +953,7 @@
       data: null,
       editing: null,
       confirming: null,
+      projects: null,
       filter: "",
       status: "all",
       historyLimit: 10,
@@ -1146,10 +1167,15 @@
         ui.runningSince = data.current_run?.started_at ? new Date(data.current_run.started_at).getTime() : Date.now();
       }
       if (!data.running && wasRunning) {
-        const failed = koEntries(lastBatch()).length;
-        toast(failed ? `Run finished · ${failed} failed` : "Run succeeded", failed ? "error" : "success");
+        const batch = lastBatch();
+        const stopped = batch.some((entry) => entry.status === "stopped");
+        const failed = koEntries(batch).filter((entry) => entry.status !== "stopped").length;
+        toast(stopped ? "Export stopped" : failed ? `Run finished · ${failed} failed` : "Run succeeded", stopped || failed ? "error" : "success");
       }
-      if (!data.running) ui.runningSince = null;
+      if (!data.running) {
+        ui.stopping = false;
+        ui.runningSince = null;
+      }
 
       renderHeader();
       $("#nav-alert").hidden = !(data.session?.status === "signed_out" || data.session?.has_profile === false);
@@ -1167,7 +1193,8 @@
       return session.status === "signed_out" || session.has_profile === false;
     };
     const signingIn = () => Boolean(ui.signingIn || (ui.data?.session?.checking && ui.data.session.task === "signin"));
-    const signinUrl = () => location.origin + "/signin";
+    const localSignIn = () => location.hostname === "127.0.0.1" || location.hostname === "localhost";
+    const signinUrl = () => localSignIn() ? "" : location.origin + "/signin";
     const openSignInScreen = () => {
       const url = signinUrl();
       if (!url) return;
@@ -1204,6 +1231,10 @@
       button.setAttribute("aria-busy", String(busy || ui.starting));
       $("#run-icon").innerHTML = ui.starting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.play;
       $("#run-label").textContent = ui.starting ? "Starting…" : busy ? "Running…" : count ? `Run ${plural(count, "resource")}` : "Run";
+      const stop = $("#stop-btn");
+      stop.hidden = !busy;
+      stop.disabled = Boolean(ui.stopping);
+      stop.textContent = ui.stopping ? "Stopping…" : "Stop";
     }
 
     const MARK = {
@@ -1214,8 +1245,21 @@
     };
     const mark = (state) => `<span class="mark" aria-hidden="true">${MARK[state]}</span>`;
 
-    const stepChip = ({ name, state, label }) =>
-      `<li class="step is-${state}" title="${esc(label ? `${name} · ${label}` : name)}">${mark(state)}${esc(name)}<span class="sr-only"> — ${esc(label)}</span></li>`;
+    /* Billable days from the monthly PDF. A run month is used as-is; otherwise the latest PDF for that name. */
+    function billableDays(name, monthValue) {
+      const named = (ui.data?.history || []).filter((entry) => sameName(entry.resource_name, name));
+      const pool = monthValue ? named.filter((entry) => entry.month_value === monthValue) : named;
+      const sorted = pool.slice().sort((a, b) => new Date(b.finished_at || 0) - new Date(a.finished_at || 0));
+      for (const entry of sorted) {
+        const file = (entry.files || []).find((item) => item.days && !isWeekly(item.path));
+        if (file) return file.days;
+      }
+      return "";
+    }
+    const chip = (name, state, label, monthValue) => ({ name, state, label, days: billableDays(name, monthValue) });
+    const stepLabel = (item) => item.days ? `${item.name} · ${item.days} JH` : item.name;
+    const stepChip = (item) =>
+      `<li class="step is-${item.state}" title="${esc(item.label ? `${stepLabel(item)} · ${item.label}` : stepLabel(item))}">${mark(item.state)}${esc(stepLabel(item))}<span class="sr-only"> — ${esc(item.label)}</span></li>`;
     const moreChip = (text) =>
       `<li><button class="step step-more" id="steps-more" type="button" aria-controls="steps-pop" aria-expanded="${ui.stepsOpen}">${esc(text)}</button></li>`;
 
@@ -1240,7 +1284,7 @@
 
       const done = items.filter((item) => item.state === "done");
       if (overflows() && done.length > 1) {
-        view = [{ name: `${done.length} exported`, state: "done", label: done.map((d) => d.name).join(", "), count: done.length },
+        view = [{ name: `${done.length} exported`, state: "done", label: done.map((d) => stepLabel(d)).join(", "), count: done.length },
                 ...items.filter((item) => item.state !== "done")];
         collapsed = true;
         show(view, moreText());
@@ -1263,7 +1307,7 @@
       const count = (state) => items.filter((item) => item.state === state).length;
       const summary = [count("done") && `${count("done")} exported`, count("failed") && `${count("failed")} failed`].filter(Boolean).join(" · ");
       pop.innerHTML = `<div class="pop-head"><span>${esc(plural(items.length, "resource"))}</span><span>${esc(summary)}</span></div>`
-        + items.map((item) => `<div class="pop-row is-${item.state}">${mark(item.state)}<span class="pop-name" title="${esc(item.name)}">${esc(item.name)}</span><span class="pop-state">${esc(item.label)}</span></div>`).join("");
+        + items.map((item) => `<div class="pop-row is-${item.state}">${mark(item.state)}<span class="pop-name" title="${esc(stepLabel(item))}">${esc(stepLabel(item))}</span><span class="pop-state">${esc(item.label)}</span></div>`).join("");
     }
 
     window.addEventListener("resize", () => { if (ui.stepItems) renderSteps(ui.stepItems); });
@@ -1323,19 +1367,24 @@
           sub: [`${monthLabel(run.month_value)}`, ...parts.map((p) => p.html.replace(/<[^>]+>/g, ""))].join(" · "),
           subHtml: parts.map((p) => `<span class="sub-item${p.optional ? " is-optional" : ""}">${p.html}</span>`).join(""),
           steps: names.map((name, i) => i < done
-            ? { name, state: "done", label: "Exported" }
-            : i === done ? { name, state: "active", label: "Exporting" } : { name, state: "queued", label: "Queued" }),
+            ? chip(name, "done", "Exported", run.month_value)
+            : i === done ? chip(name, "active", "Exporting", run.month_value) : chip(name, "queued", "Queued", run.month_value)),
           dismiss: false,
         };
       } else if (signingIn() || loggedOut()) {
+        const waiting = signingIn();
         view = {
           state: waiting ? "running" : "logged-out",
           icon: waiting ? '<span class="spinner" aria-hidden="true"></span>' : ICON.lock,
           title: waiting ? "Connexion à Power BI" : "Power BI est déconnecté",
           sub: waiting
-            ? "Dans la fenêtre : clique et tape, y compris pour l'Authenticator."
-            : "Ouvre l'écran et fais toute la connexion là-bas, Authenticator compris.",
-          steps: activeNames().map((name) => ({ name, state: "queued", label: "Included" })),
+            ? (localSignIn()
+              ? "Chrome est ouvert sur ce PC. Connecte-toi dans cette fenêtre, Authenticator compris."
+              : "Dans la fenêtre : clique et tape, y compris pour l'Authenticator.")
+            : (localSignIn()
+              ? "Clique Sign in. Chrome s'ouvre ici pour la connexion, Authenticator compris."
+              : "Ouvre l'écran et fais toute la connexion là-bas, Authenticator compris."),
+          steps: activeNames().map((name) => chip(name, "queued", "Included", "")),
           signin: !waiting,
           screen: waiting && Boolean(signinUrl()),
           dismiss: false,
@@ -1351,8 +1400,8 @@
           subHtml: `${runIdButton(runId)} · ` + esc(failures.length === 1 ? reason(failures[0].message) : failures.map((e) => `${e.resource_name}: ${reason(e.message)}`).join(" · ")),
           retry: { names: retryable(batch), month: latest.month_value, runId },
           steps: batch.map((e) => e.status === "ok"
-            ? { name: e.resource_name, state: "done", label: "Exported" }
-            : { name: e.resource_name, state: "failed", label: "Failed" }),
+            ? chip(e.resource_name, "done", "Exported", e.month_value)
+            : chip(e.resource_name, "failed", e.status === "stopped" ? "Stopped" : "Failed", e.month_value)),
           dismiss: true,
         };
       } else {
@@ -1371,7 +1420,7 @@
           subHtml: latest && names.length
             ? `Last run ${runIdButton(runId)} · ${esc(when(latest.finished_at))} · ${failures.length ? `${batch.length - failures.length}/${batch.length} exported` : "succeeded"}${esc(skipped)}`
             : "",
-          steps: names.map((name) => ({ name, state: "queued", label: "Included" })),
+          steps: names.map((name) => chip(name, "queued", "Included", "")),
           dismiss: false,
         };
       }
@@ -1451,9 +1500,10 @@
       $("#new-name").disabled = running();
       $("#add-btn").disabled = running();
 
-      const key = JSON.stringify([all, running(), ui.editing, ui.confirming]);
+      const key = JSON.stringify([all, running(), ui.editing, ui.confirming, ui.projects]);
       if (!force && ui.keys.resources === key) return;
       if (!force && ui.editing && document.activeElement?.id === "edit-input") return;
+      if (!force && ui.projects && document.activeElement?.id === "project-input") return;
       ui.keys.resources = key;
 
       const list = $("#res-list");
@@ -1485,17 +1535,18 @@
               <button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>
             </div></li>`;
         }
-        return `<li class="res-row${item.excluded ? " is-excluded" : ""}${enter(item.name, index)}">
+        return `<li class="res-row${item.excluded ? " is-excluded" : ""}${ui.projects === item.name ? " is-projects" : ""}${enter(item.name, index)}">
           <div style="min-width:0">
             <p class="res-name" title="${name}">${name}</p>
-            <p class="res-meta">${item.excluded ? "Excluded" : "Included"}</p>
+            <p class="res-meta">${item.excluded ? "Excluded" : "Included"} · <button class="link" type="button" data-action="projects" data-name="${name}" title="${esc(projectTitle(item))}" ${locked}>${esc(projectLabel(item))}</button></p>
           </div>
           <div class="res-tools">
             <button class="switch" type="button" role="switch" aria-checked="${!item.excluded}" aria-label="Include ${name} in runs"
               data-action="toggle" data-name="${name}" ${locked}></button>
             <button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-name="${name}" ${locked}>Edit</button>
             <button class="btn btn-ghost btn-sm is-danger" type="button" data-action="remove" data-name="${name}" ${locked}>Remove</button>
-          </div></li>`;
+          </div>
+          ${ui.projects === item.name ? projectEditor(item, locked) : ""}</li>`;
       }).join("");
 
       const input = $("#edit-input");
@@ -1507,6 +1558,35 @@
           if (event.key === "Escape") { ui.editing = null; renderResources(true); }
         });
       }
+      const projectInput = $("#project-input");
+      if (projectInput && document.activeElement !== projectInput) {
+        projectInput.focus({ preventScroll: true });
+        projectInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); $('[data-action="project-add"]').click(); }
+          if (event.key === "Escape") { ui.projects = null; renderResources(true); }
+        });
+      }
+    }
+
+    const projectLabel = (item) => {
+      const projects = item.projects || [];
+      if (!projects.length) return "All projects";
+      return projects.length === 1 ? projects[0] : `${projects.length} projects`;
+    };
+    const projectTitle = (item) => (item.projects || []).join(", ") || "Every project is included";
+    function projectEditor(item, locked) {
+      const projects = item.projects || [];
+      const chips = projects.length
+        ? projects.map((project, index) => `<span class="res-chip"><span title="${esc(project)}">${esc(project)}</span><button type="button" data-action="project-remove" data-name="${esc(item.name)}" data-index="${index}" aria-label="Remove ${esc(project)}" ${locked}>×</button></span>`).join("")
+        : `<p class="res-meta">Every project is included.</p>`;
+      return `<div class="res-projects">
+        <div class="res-project-add">
+          <label class="sr-only" for="project-input">Project name</label>
+          <input class="input input-sm" id="project-input" type="text" maxlength="160" placeholder="Project name" autocomplete="off" ${locked}>
+          <button class="btn btn-secondary btn-sm" type="button" data-action="project-add" data-name="${esc(item.name)}" ${locked}>Add</button>
+        </div>
+        <div class="res-chips">${chips}</div>
+      </div>`;
     }
 
     $("#res-list").addEventListener("click", async (event) => {
@@ -1529,17 +1609,38 @@
           }
           toast(exclude ? `${name} excluded from runs` : `${name} included in runs`);
         } else if (action === "edit") {
-          ui.editing = name; ui.confirming = null;
+          ui.editing = name; ui.confirming = null; ui.projects = null;
           renderResources(true);
           return;
         } else if (action === "remove") {
-          ui.confirming = name; ui.editing = null;
+          ui.confirming = name; ui.editing = null; ui.projects = null;
           renderResources(true);
           return;
         } else if (action === "cancel") {
           ui.editing = null; ui.confirming = null;
           renderResources(true);
           return;
+        } else if (action === "projects") {
+          ui.projects = ui.projects === name ? null : name;
+          ui.editing = null; ui.confirming = null;
+          renderResources(true);
+          return;
+        } else if (action === "project-add") {
+          const value = ($("#project-input")?.value || "").trim();
+          if (!value) return;
+          const current = resources().find((item) => sameName(item.name, name));
+          const projects = [...(current?.projects || [])];
+          if (projects.some((project) => sameName(project, value))) {
+            toast(`${value} is already selected`, "info");
+            return;
+          }
+          await withBusy(button, "Adding…", () => post("/api/resources/projects", { name, projects: [...projects, value] }));
+          toast(`Project added for ${name}`);
+        } else if (action === "project-remove") {
+          const current = resources().find((item) => sameName(item.name, name));
+          const projects = (current?.projects || []).filter((_, index) => String(index) !== button.dataset.index);
+          await withBusy(button, "…", () => post("/api/resources/projects", { name, projects }));
+          toast("Project removed");
         } else if (action === "save") {
           const value = $("#edit-input").value;
           await withBusy(button, "Saving…", () => post("/api/resources/update", { old_name: name, name: value }));
@@ -1688,20 +1789,25 @@
       const name = esc(item.name || "Legacy run");
       const { entry } = item;
       const ok = item.state === "ok";
+      const stopped = entry.status === "stopped";
       const why = reason(entry.message);
       const detail = errorDetail(entry.message);
-      const files = (entry.files || []).map((file) =>
-        `<a class="link" href="${esc("/download?path=" + encodeURIComponent(file.path))}" download title="${esc(fileName(file.path))}">${ICON.download}${isWeekly(file.path) ? "Weekly PDF" : "Monthly PDF"} <span class="link-meta">${esc(bytes(file.size))}</span></a>`).join("");
+      const files = (entry.files || []).map((file) => {
+        const weekly = isWeekly(file.path);
+        const days = !weekly && file.days ? ` · ${file.days} JH` : "";
+        return `<a class="link" href="${esc("/download?path=" + encodeURIComponent(file.path))}" download title="${esc(fileName(file.path))}">${ICON.download}${weekly ? "Weekly PDF" : "Monthly PDF"}${esc(days)} <span class="link-meta">${esc(bytes(file.size))}</span></a>`;
+      }).join("");
+      const fileBlock = files ? `<div class="rr-files">${files}</div>` : "";
       const body = item.retrying
         ? `<p class="rr-detail">Retrying…</p>`
         : ok
-        ? (files ? `<div class="rr-files">${files}</div>` : `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>`)
-        : `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>${detail && detail.replace(/^Message:\s*/i, "") !== why
+        ? (fileBlock || `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>`)
+        : `<p class="rr-detail" title="${esc(why)}">${esc(why)}</p>${fileBlock}${detail && detail.replace(/^Message:\s*/i, "") !== why
             ? `<details data-id="${esc(entry.id || entry.started_at)}"><summary>Error details</summary><pre>${esc(detail)}</pre></details>` : ""}`;
       return `<li class="rr is-${item.state}${item.retrying ? " is-retrying" : ""}${item.name ? "" : " is-legacy"}">
         ${item.retrying
           ? `<span class="rr-state is-active" title="Retrying">${mark("active")}<span class="sr-only">Retrying</span></span>`
-          : `<span class="rr-state is-${ok ? "done" : "failed"}" title="${ok ? "Exported" : "Failed"}">${mark(ok ? "done" : "failed")}<span class="sr-only">${ok ? "Exported" : "Failed"}</span></span>`}
+          : `<span class="rr-state is-${ok ? "done" : "failed"}" title="${ok ? "Exported" : stopped ? "Stopped" : "Failed"}">${mark(ok ? "done" : "failed")}<span class="sr-only">${ok ? "Exported" : stopped ? "Stopped" : "Failed"}</span></span>`}
         <div style="min-width:0"><p class="rr-name" title="${name}">${name}</p>${body}</div>
         <div class="rr-side">${canRetry(item, run)
           ? `<button class="btn btn-secondary btn-xs" type="button" data-retry-one="${esc(item.name)}" data-run="${esc(run.id)}" data-month="${esc(run.month)}" aria-label="Retry ${name}"${blockedAttr()}>${ICON.retry}Retry</button>` : ""}<span class="rr-time">${esc(duration(entry))}</span></div>
@@ -1783,6 +1889,19 @@
         await startRun(monthInputToValue(month.value));
       } finally {
         ui.starting = false;
+        renderHeader();
+      }
+    });
+
+    $("#stop-btn").addEventListener("click", async () => {
+      ui.stopping = true;
+      renderHeader();
+      try {
+        await post("/api/run/stop", {});
+        toast("Stopping the export");
+      } catch (error) {
+        ui.stopping = false;
+        toast(error.message, "error");
         renderHeader();
       }
     });

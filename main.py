@@ -28,7 +28,17 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.selenium_manager import SeleniumManager
 
 from paths import CONFIG, DOWNLOADS, HISTORY, PROFILE, SESSION_FILE, SHOTS
-from workflow import SIGNED_IN_TEXT, SignInRequired, debug, say, sign_in_requested, workflow
+from workflow import (
+    SIGNED_IN_TEXT,
+    SignInRequired,
+    clear_stop,
+    debug,
+    mark_stop,
+    say,
+    sign_in_requested,
+    stop_requested as workflow_stop_requested,
+    workflow,
+)
 
 _signin_lock = threading.RLock()
 _signin_driver: webdriver.Chrome | None = None
@@ -69,18 +79,29 @@ def run(
     files: list[str] = []
     screenshot = ""
     try:
-        paths = workflow(browser.get(), secrets, resource_name, month_value, stamp=get_config()["signature"])
+        paths = workflow(
+            browser.get(),
+            secrets,
+            resource_name,
+            month_value,
+            stamp=get_config()["signature"],
+            projects=resource_projects(resource_name),
+        )
         files = [path.relative_to(DOWNLOADS).as_posix() for path in paths]
         message = f"{len(files)} files exported"
         debug(message)
     except Exception as exc:
-        status = "error"
-        message = public_message(exc)
-        if isinstance(exc, SignInRequired):
-            save_session("signed_out", "Power BI asked to sign in during an export. Sign in again before running exports.")
+        if stop_requested():
+            status = "stopped"
+            message = "Stopped"
         else:
-            traceback.print_exc()
-        screenshot = _screenshot(browser, run_id, resource_name)
+            status = "error"
+            message = public_message(exc)
+            if isinstance(exc, SignInRequired):
+                save_session("signed_out", "Power BI asked to sign in during an export. Sign in again before running exports.")
+            else:
+                traceback.print_exc()
+            screenshot = _screenshot(browser, run_id, resource_name)
     finally:
         if owns_browser:
             browser.close()
@@ -128,6 +149,61 @@ def run_month(run_id: str) -> str | None:
     return next((entry.get("month_value") for entry in history() if entry.get("run_id") == run_id), None)
 
 
+_active_browser: "Browser | None" = None
+
+
+def stop_requested() -> bool:
+    return workflow_stop_requested()
+
+
+def begin_run() -> None:
+    clear_stop()
+
+
+def request_stop() -> None:
+    """Kill the export browser so the run stops without waiting for the current PDF."""
+    mark_stop()
+    threading.Thread(target=_close_active_browser, name="stop-run", daemon=True).start()
+
+
+def _close_active_browser() -> None:
+    _kill_export_chrome()
+    browser = _active_browser
+    driver = browser.driver if browser is not None else None
+    if driver is None:
+        return
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
+
+def _kill_export_chrome() -> None:
+    """End the robot's Chrome. The person's own browser does not use this profile."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe", "/T"], check=False, capture_output=True)
+        env = os.environ.copy()
+        env["CRA_PROFILE"] = str(PROFILE)
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_Process -Filter \"Name = 'chrome.exe'\" | "
+                "Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:CRA_PROFILE) } | "
+                "ForEach-Object { taskkill /F /T /PID $_.ProcessId | Out-Null }",
+            ],
+            check=False,
+            capture_output=True,
+            env=env,
+        )
+        return
+    try:
+        subprocess.run(["pkill", "-f", "--", f"--user-data-dir={PROFILE}"], check=False)
+    except OSError:
+        pass
+
+
 def run_batch(
     resources: list[str],
     month_value: str = DEFAULT_MONTH,
@@ -139,14 +215,21 @@ def run_batch(
     run_id = run_id or new_run_id()
     results = []
     browser = Browser()
+    global _active_browser
+    _active_browser = browser
     try:
         for index, resource_name in enumerate(resources, start=1):
+            if stop_requested():
+                break
             if on_progress:
                 on_progress(resource_name, index, len(resources))
             results.append(run(resource_name=resource_name, month_value=month_value, run_id=run_id, index=index, browser=browser))
             if on_result:
                 on_result(results[-1])
+            if results[-1]["status"] == "stopped" or stop_requested():
+                break
     finally:
+        _active_browser = None
         browser.close()
     return results
 
@@ -267,10 +350,18 @@ def get_config() -> dict:
         except (ValueError, TypeError, json.JSONDecodeError, AttributeError):
             pass
     return {
-        "resources": [{"name": DEFAULT_RESOURCE, "excluded": False}],
+        "resources": [{"name": DEFAULT_RESOURCE, "excluded": False, "projects": []}],
         "month_value": DEFAULT_MONTH,
         "signature": _signature_settings(None),
     }
+
+
+def resource_projects(resource_name: str) -> list[str]:
+    """Projects saved for this person. Empty means the export keeps every project."""
+    for item in get_config()["resources"]:
+        if item["name"].casefold() == resource_name.casefold():
+            return list(item.get("projects") or [])
+    return []
 
 
 def active_resources(config: dict | None = None) -> list[str]:
@@ -324,7 +415,7 @@ def add_resource(name: str) -> dict:
     resource = normalize_resource_name(name)
     if resource.casefold() in {item["name"].casefold() for item in config["resources"]}:
         raise ValueError(f"'{resource}' is already in the list")
-    return save_config([*config["resources"], {"name": resource, "excluded": False}])
+    return save_config([*config["resources"], {"name": resource, "excluded": False, "projects": []}])
 
 
 def update_resource(old_name: str, new_name: str) -> dict:
@@ -350,6 +441,19 @@ def set_resource_excluded(name: str, excluded: bool) -> dict:
     return save_config(items)
 
 
+def set_resource_projects(name: str, projects) -> dict:
+    """Optional project list for one person. An empty list exports every project."""
+    if not isinstance(projects, list):
+        raise ValueError("Projects must be a list of names")
+    config = get_config()
+    items = config["resources"]
+    index = next((i for i, item in enumerate(items) if item["name"].casefold() == name.casefold()), None)
+    if index is None:
+        raise ValueError("Resource not found")
+    items[index] = {**items[index], "projects": _project_names(projects, strict=True)}
+    return save_config(items)
+
+
 def remove_resource(name: str) -> dict:
     config = get_config()
     items = [item for item in config["resources"] if item["name"].casefold() != name.casefold()]
@@ -358,10 +462,41 @@ def remove_resource(name: str) -> dict:
     return save_config(items)
 
 
+def _project_names(raw, strict: bool = False) -> list[str]:
+    """Unique project names, in the order they were given."""
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        if strict:
+            raise ValueError("Projects must be a list of names")
+        return []
+    cleaned, seen = [], set()
+    for item in raw:
+        name = " ".join(str(item or "").split())
+        if not name:
+            continue
+        if len(name) > 160:
+            if strict:
+                raise ValueError("Project name is too long")
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(name)
+    if strict and len(cleaned) > 30:
+        raise ValueError("Choose at most 30 projects")
+    return cleaned[:30]
+
+
 def _clean_resource(item) -> dict:
     if isinstance(item, str):  # older config files stored plain names
-        return {"name": normalize_resource_name(item), "excluded": False}
-    return {"name": normalize_resource_name(item["name"]), "excluded": bool(item.get("excluded", False))}
+        return {"name": normalize_resource_name(item), "excluded": False, "projects": []}
+    return {
+        "name": normalize_resource_name(item["name"]),
+        "excluded": bool(item.get("excluded", False)),
+        "projects": _project_names(item.get("projects") or []),
+    }
 
 
 def _unique(items: list[dict]) -> list[dict]:
@@ -418,7 +553,7 @@ def _browser(headless: bool = True) -> webdriver.Chrome:
     if chrome_bin:
         options.binary_location = chrome_bin
     options.add_argument(f"--user-data-dir={PROFILE}")
-    options.add_argument("--window-size=1024,640")
+    options.add_argument("--window-size=1600,1000")
     if headless:
         options.add_argument("--headless=new")
     else:
@@ -1014,13 +1149,21 @@ def close_browser(driver: webdriver.Chrome, timeout: float = 20) -> None:
         driver.quit()
     except Exception:
         traceback.print_exc()
+    if stop_requested():
+        _kill_export_chrome()
+        lock = PROFILE / "SingletonLock"
+        lock.unlink(missing_ok=True)
+        return
     lock = PROFILE / "SingletonLock"
     deadline = time.monotonic() + timeout
     while _profile_in_use(lock) and time.monotonic() < deadline:
         time.sleep(0.5)
     if _profile_in_use(lock):
         debug("Chrome did not exit in time; closing it.")
-        subprocess.run(["pkill", "-f", "--", f"--user-data-dir={PROFILE}"], check=False)
+        try:
+            subprocess.run(["pkill", "-f", "--", f"--user-data-dir={PROFILE}"], check=False)
+        except OSError:
+            pass
         time.sleep(2)
         lock.unlink(missing_ok=True)
     time.sleep(1)
@@ -1029,7 +1172,10 @@ def close_browser(driver: webdriver.Chrome, timeout: float = 20) -> None:
 def _profile_in_use(lock: Path) -> bool:
     if lock.is_symlink() or lock.exists():
         return True
-    found = subprocess.run(["pgrep", "-f", "--", f"--user-data-dir={PROFILE}"], capture_output=True, check=False)
+    try:
+        found = subprocess.run(["pgrep", "-f", "--", f"--user-data-dir={PROFILE}"], capture_output=True, check=False)
+    except OSError:
+        return False
     return found.returncode == 0
 
 
@@ -1054,6 +1200,8 @@ def public_message(exc: BaseException, fallback: str = "Something unexpected wen
         return "Could not click a button in the report."
     if isinstance(exc, TimeoutException):
         raw = ((exc.msg or "") if isinstance(exc, WebDriverException) else str(exc)).casefold()
+        if "pdf" in raw:
+            return "Could not click the Export to PDF button. It did not appear in time."
         if "click" in raw or "clickable" in raw:
             return "Could not click a button in the report. It did not appear in time."
         return "The report took too long to respond."

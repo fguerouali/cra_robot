@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from pypdf import PdfReader
+
 from paths import HAND_FONT, INDEX, LOGS
 from signature import remove_signature, save_signature, signature_status, SIGNATURE
 
@@ -38,10 +40,14 @@ from main import (
     SHOTS,
     run_batch,
     run_month,
+    request_stop,
+    stop_requested,
+    begin_run,
     save_config,
     save_signature_options,
     session_status,
     set_resource_excluded,
+    set_resource_projects,
     storage_summary,
     type_sign_in,
     point_sign_in,
@@ -181,13 +187,41 @@ def _state() -> dict:
     }
 
 
+_jh_cache: dict[str, tuple[int, str]] = {}
+
+
+def _billable_days(path: Path) -> str:
+    """The 'Nombre de JH' value printed on a monthly PDF, cached by file time."""
+    stamp = path.stat().st_mtime_ns
+    cached = _jh_cache.get(str(path))
+    if cached and cached[0] == stamp:
+        return cached[1]
+    value = ""
+    try:
+        text = PdfReader(str(path)).pages[0].extract_text() or ""
+        lines = [line.strip() for line in text.splitlines()]
+        for index, line in enumerate(lines):
+            if line == "Nombre de JH" and index + 1 < len(lines) and lines[index + 1]:
+                value = lines[index + 1]
+                break
+    except Exception:
+        value = ""
+    _jh_cache[str(path)] = (stamp, value)
+    return value
+
+
 def _file_details(paths: list[str]) -> list[dict]:
     details = []
     for raw in paths:
         target = _download_target(raw)
         if target is None or target.suffix.casefold() != ".pdf":
             continue
-        details.append({"path": raw, "size": target.stat().st_size})
+        item = {"path": raw, "size": target.stat().st_size}
+        if "_hebdo" not in Path(raw).name:
+            days = _billable_days(target)
+            if days:
+                item["days"] = days
+        details.append(item)
     return details
 
 
@@ -235,6 +269,7 @@ def _start_batch(month_value: str, only: list[str] | None = None, retry_of: str 
         }
     if not retry_of:
         save_config(config["resources"], month_value)
+    begin_run()
 
     def progress(resource_name: str, index: int, total: int) -> None:
         with _lock:
@@ -247,6 +282,8 @@ def _start_batch(month_value: str, only: list[str] | None = None, retry_of: str 
         if entry["status"] == "ok":
             count = len(entry["files"])
             log(f"{entry['resource_name']} is done · {count} PDF{'s' if count != 1 else ''} saved", "ok")
+        elif entry["status"] == "stopped":
+            log(f"Stopped during {entry['resource_name']}", "error")
         else:
             log(f"Could not export {entry['resource_name']} · {(entry['message'] or 'Unknown error').splitlines()[0]}", "error",
                 image=entry.get("screenshot", ""))
@@ -259,10 +296,12 @@ def _start_batch(month_value: str, only: list[str] | None = None, retry_of: str 
         try:
             results = run_batch(resources, month_value, on_progress=progress, run_id=run_id, on_result=result)
             succeeded = sum(1 for item in results if item["status"] == "ok")
-            failed = len(results) - succeeded
+            failed = sum(1 for item in results if item["status"] == "error")
             if succeeded:
                 save_session("healthy", "Power BI opens without asking to sign in.")
-            if not failed:
+            if stop_requested():
+                log(f"Stopped · {succeeded} exported, the rest were not run", "error")
+            elif not failed:
                 log(f"All done · {succeeded} exported", "ok")
             elif succeeded:
                 log(f"Finished with problems · {succeeded} exported, {failed} failed", "error")
@@ -313,6 +352,25 @@ def _zip(targets: list[Path]) -> bytes:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _cors_headers(self) -> None:
+        """Let the Chrome extension call this robot. The existing page is same-origin and skips this."""
+        origin = self.headers.get("Origin", "")
+        if origin.startswith("chrome-extension://"):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def do_OPTIONS(self) -> None:
+        if not self.headers.get("Origin", "").startswith("chrome-extension://"):
+            self._send(404, "text/plain; charset=utf-8", b"Not found")
+            return
+        self.send_response(204)
+        self._cors_headers()
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.end_headers()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/":
@@ -427,6 +485,13 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._send(202, "application/json", b'{"running": true}')
                 return
+            if path == "/api/run/stop":
+                if not _is_running():
+                    self._send(409, "application/json", b'{"error": "Nothing is running"}')
+                    return
+                request_stop()
+                self._send(202, "application/json", b'{"stopping": true}')
+                return
             if path == "/api/session/input":
                 kind = str(payload.get("kind", ""))
                 if kind == "click":
@@ -461,6 +526,8 @@ class Handler(BaseHTTPRequestHandler):
                 config = update_resource(str(payload.get("old_name", "")), str(payload.get("name", "")))
             elif path == "/api/resources/exclude":
                 config = set_resource_excluded(str(payload.get("name", "")), bool(payload.get("excluded", False)))
+            elif path == "/api/resources/projects":
+                config = set_resource_projects(str(payload.get("name", "")), payload.get("projects"))
             elif path == "/api/resources/delete":
                 config = remove_resource(str(payload.get("name", "")))
             else:
@@ -492,6 +559,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._cors_headers()
         self.end_headers()
         self.wfile.write(body)
 
