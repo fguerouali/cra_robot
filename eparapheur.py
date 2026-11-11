@@ -385,11 +385,11 @@ def _login(driver: webdriver.Chrome, username: str, password: str) -> None:
     while time.time() < deadline:
         if _page_has(driver, "nouvelle demande") or _page_has(driver, "mes demandes"):
             return
-        if _password_field(driver) is not None:
+        if _password_field(driver) is not None or _page_has(driver, "mot de passe") or _page_has(driver, "se connecter"):
             break
         time.sleep(0.4)
     else:
-        raise RuntimeError("The Ersal sign-in page did not open")
+        raise RuntimeError(f"The Ersal sign-in page did not open. Chrome showed {_page_clue(driver)}")
     field = _find_field(driver, "Nom d'utilisateur") or _first_text_input(driver)
     secret = _password_field(driver)
     if field is None or secret is None:
@@ -772,11 +772,22 @@ def _file_input(driver: webdriver.Chrome):
     return None
 
 
+def _shown(element) -> bool:
+    try:
+        return element.is_displayed()
+    except WebDriverException:
+        return False
+
+
 def _password_field(driver: webdriver.Chrome):
+    def pick(elements):
+        visible = [item for item in elements if _shown(item)]
+        return (visible or elements or [None])[0]
+
     driver.switch_to.default_content()
-    fields = [item for item in driver.find_elements(By.CSS_SELECTOR, "input[type='password']") if item.is_displayed()]
-    if fields:
-        return fields[0]
+    found = pick(driver.find_elements(By.CSS_SELECTOR, "input[type='password']"))
+    if found is not None:
+        return found
     frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
     for frame in frames:
         driver.switch_to.default_content()
@@ -784,9 +795,9 @@ def _password_field(driver: webdriver.Chrome):
             driver.switch_to.frame(frame)
         except WebDriverException:
             continue
-        fields = [item for item in driver.find_elements(By.CSS_SELECTOR, "input[type='password']") if item.is_displayed()]
-        if fields:
-            return fields[0]
+        found = pick(driver.find_elements(By.CSS_SELECTOR, "input[type='password']"))
+        if found is not None:
+            return found
     driver.switch_to.default_content()
     return None
 
@@ -896,14 +907,9 @@ def _chrome() -> webdriver.Chrome:
         options.add_argument("--window-position=40,40")
     if os.getenv("IN_CONTAINER"):
         options.add_argument("--no-sandbox")
-    proxy = (
-        os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
-        or os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or ""
-    ).strip()
-    if proxy:
-        options.add_argument(f"--proxy-server={proxy}")
-        bypass = os.getenv("NO_PROXY") or os.getenv("no_proxy") or "localhost,127.0.0.1"
-        options.add_argument("--proxy-bypass-list=" + bypass.replace(",", ";"))
+    # Ersal is on the internal network. Chrome keeps the Windows proxy settings, including
+    # the bypass list. Forcing HTTP_PROXY would send this host through the GitHub proxy.
+    options.accept_insecure_certs = True
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
     options.add_argument("--disable-search-engine-choice-screen")
@@ -925,6 +931,18 @@ def _chrome() -> webdriver.Chrome:
         agent = driver.execute_script("return navigator.userAgent").replace("HeadlessChrome", "Chrome")
         driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": agent})
     return driver
+
+
+def _page_clue(driver: webdriver.Chrome) -> str:
+    """Where Chrome actually is, so a failed open says more than a blank error."""
+    try:
+        url = driver.current_url or ""
+        title = driver.title or ""
+    except WebDriverException:
+        url, title = "", ""
+    text = " ".join(_visible_text(driver).split())[:120]
+    parts = [part for part in (url, title, text) if part and part != "about:blank"]
+    return " · ".join(parts)[:220] or "a blank page"
 
 
 def _snap(driver: webdriver.Chrome) -> None:
