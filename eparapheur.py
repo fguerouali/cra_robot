@@ -23,6 +23,7 @@ from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
     StaleElementReferenceException,
+    TimeoutException,
     WebDriverException,
 )
 from selenium.webdriver.chrome.options import Options
@@ -330,6 +331,14 @@ def transfer(
     _wait_sent(driver)
 
 
+def _open(driver: webdriver.Chrome, url: str) -> None:
+    """Open the page. Ersal keeps loading scripts after the form is already usable."""
+    try:
+        driver.get(url)
+    except TimeoutException:
+        print("eparapheur: the page is still loading; continuing", flush=True)
+
+
 def _step(text: str) -> None:
     print(f"eparapheur: {text}", flush=True)
     with _lock:
@@ -337,8 +346,8 @@ def _step(text: str) -> None:
 
 
 def _login(driver: webdriver.Chrome, username: str, password: str) -> None:
-    driver.get(ERSAL_URL)
-    deadline = time.time() + 45
+    _open(driver, ERSAL_URL)
+    deadline = time.time() + 90
     while time.time() < deadline:
         if _page_has(driver, "nouvelle demande") or _page_has(driver, "mes demandes"):
             return
@@ -835,18 +844,32 @@ def _error_text(driver: webdriver.Chrome) -> str:
 
 
 def _chrome() -> webdriver.Chrome:
+    """Headless on the server: a disconnected remote desktop makes a visible window stall."""
     EPARAPHEUR_PROFILE.mkdir(parents=True, exist_ok=True)
     options = Options()
+    options.page_load_strategy = "eager"
     chrome_bin = os.getenv("CHROME_BIN", "").strip()
     if chrome_bin:
         options.binary_location = chrome_bin
     options.add_argument(f"--user-data-dir={EPARAPHEUR_PROFILE}")
     options.add_argument("--window-size=1440,900")
-    options.add_argument("--window-position=40,40")
+    headless = os.getenv("SIGNIN_IN_BROWSER", "").strip().lower() in ("1", "true", "yes") or bool(os.getenv("IN_CONTAINER"))
+    if headless:
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-dev-shm-usage")
+    else:
+        options.add_argument("--window-position=40,40")
     if os.getenv("IN_CONTAINER"):
         options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
+    proxy = (
+        os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+        or os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or ""
+    ).strip()
+    if proxy:
+        options.add_argument(f"--proxy-server={proxy}")
+        bypass = os.getenv("NO_PROXY") or os.getenv("no_proxy") or "localhost,127.0.0.1"
+        options.add_argument("--proxy-bypass-list=" + bypass.replace(",", ";"))
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
     options.add_argument("--disable-search-engine-choice-screen")
@@ -863,7 +886,10 @@ def _chrome() -> webdriver.Chrome:
         ["--browser", "chrome", "--skip-driver-in-path"]
     )["driver_path"]
     driver = webdriver.Chrome(service=Service(driver_path), options=options)
-    driver.set_page_load_timeout(60)
+    driver.set_page_load_timeout(120)
+    if headless:
+        agent = driver.execute_script("return navigator.userAgent").replace("HeadlessChrome", "Chrome")
+        driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": agent})
     return driver
 
 
@@ -878,8 +904,16 @@ def _snap(driver: webdriver.Chrome) -> None:
 def _readable(exc: Exception) -> str:
     if isinstance(exc, RuntimeError) and exc.args:
         return str(exc)[:300]
+    text = ""
     if isinstance(exc, WebDriverException):
-        return "Ersal took too long to respond."
+        text = ((exc.msg or str(exc)).splitlines() or [""])[0].removeprefix("Message:").strip()
+    low = text.casefold()
+    if any(part in low for part in ("session not created", "failed to start", "chrome not reachable", "cannot find chrome")):
+        return "Chrome could not open on this computer. Keep the Windows session signed in, then try again."
+    if isinstance(exc, TimeoutException) or "timed out" in low or "timeout" in low:
+        return "Ersal took too long to open. Try again."
+    if text:
+        return text[:240]
     return "The send to Eparapheur stopped unexpectedly."
 
 
