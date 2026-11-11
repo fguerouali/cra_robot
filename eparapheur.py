@@ -36,10 +36,6 @@ from paths import EPARAPHEUR, EPARAPHEUR_PROFILE, SHOTS
 ERSAL_URL = "https://ersal-prd.attijariwafa.net/navigator/"
 DOCUMENT_TYPE = "Compte Rendu d'Activité"
 PROJECT_CODE = "0"
-_MONTHS = (
-    "janvier", "fevrier", "mars", "avril", "mai", "juin",
-    "juillet", "aout", "septembre", "octobre", "novembre", "decembre",
-)
 
 _lock = threading.Lock()
 _job = {"running": False, "entry_id": "", "run_id": "", "step": "", "error": ""}
@@ -264,26 +260,6 @@ def pick_choice(options: list[str], wanted: str) -> str | None:
     return None
 
 
-def pick_period(options: list[str], month_value: str) -> str | None:
-    month, year = month_value.split("/")
-    name = _MONTHS[int(month) - 1]
-    bare = str(int(month))
-    best = None
-    best_score = 0
-    for option in options:
-        text = _norm(option)
-        score = 0
-        if _has(text, month) and _has(text, year):
-            score = 5
-        elif _has(text, name) and _has(text, year):
-            score = 4
-        elif _has(text, bare) and _has(text, year):
-            score = 3
-        if score > best_score:
-            best, best_score = option, score
-    return best
-
-
 def _run(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str, settings: dict, resource_name: str) -> None:
     driver = None
     error = ""
@@ -366,7 +342,7 @@ def transfer(
     _type_into(driver, ("Nombre de jours travaillés", "Nombre de jours travailles"), days)
     _type_into(driver, ("Descriptif de la demande",), description)
     _set_project_code(driver)
-    _choose(driver, "Période de prestation", lambda options: pick_period(options, month_value), month_value.split("/")[1])
+    _type_into(driver, ("Période de prestation", "Periode de prestation"), month_value)
     _choose(driver, "Validateur suivant", lambda options: pick_choice(options, approver), approver)
     _step("Weekly PDF")
     _click(driver, "Ajout complément")
