@@ -15,6 +15,8 @@ DATA.mkdir(parents=True, exist_ok=True)
 
 HISTORY = DATA / "runs.jsonl"
 CONFIG = DATA / "config.json"
+EPARAPHEUR = DATA / "eparapheur.json"
+EPARAPHEUR_PROFILE = DATA / "chrome-profile-ersal"
 PROFILE = DATA / "chrome-profile"
 SESSION_FILE = DATA / "session.json"
 LOGS = DATA / "logs"

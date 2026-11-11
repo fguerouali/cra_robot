@@ -133,6 +133,10 @@
     .stamp-date { margin: 0; color: var(--text-tertiary); font-family: "Indie Flower", cursive; font-size: 15px; line-height: 20px; font-weight: 400; }
     .stamp-name { margin: 0; color: var(--text); font-family: "Indie Flower", cursive; font-size: 20px; line-height: 26px; font-weight: 400; }
     .set-field { margin-top: 8px; width: min(100%, 320px); }
+    .epar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 0 20px 4px; }
+    .epar-grid label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+    .epar-grid .set-field { width: 100%; margin-top: 0; }
+    .epar-save { display: flex; justify-content: flex-end; padding: 12px 20px 16px; }
     .signature-hidden { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-tertiary); font-size: 13px; font-weight: 500; }
     .signature-hidden svg { width: 20px; height: 20px; }
     .health { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; }
@@ -649,6 +653,7 @@
       .feed-tools, .feed-head .search { width: 100%; }
       .rr { grid-template-columns: 16px minmax(0, 1fr); }
       .rr-side { grid-column: 2; }
+      .epar-grid { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -876,6 +881,35 @@
         </div>
       </section>
 
+      <section class="card" aria-labelledby="epar-title">
+        <div class="card-head">
+          <div>
+            <h3 class="card-title" id="epar-title">Eparapheur</h3>
+            <p class="card-sub">Used by the Eparapheur button on a successful export. Working days, the month and the description come from that export. The project code is always 0.</p>
+          </div>
+        </div>
+        <div class="epar-grid" id="epar-fields">
+          <label>Username
+            <input class="input input-sm set-field" id="epar-user" type="text" maxlength="120" autocomplete="username" spellcheck="false">
+          </label>
+          <label>Password
+            <input class="input input-sm set-field" id="epar-password" type="password" maxlength="200" autocomplete="new-password" placeholder="Password">
+          </label>
+          <label>Company name
+            <input class="input input-sm set-field" id="epar-company" type="text" maxlength="160" autocomplete="organization" placeholder="Raison sociale">
+          </label>
+          <label>Provider name
+            <input class="input input-sm set-field" id="epar-provider" type="text" maxlength="160" autocomplete="off" placeholder="Nom du prestataire">
+          </label>
+          <label>Next approver
+            <input class="input input-sm set-field" id="epar-approver" type="text" maxlength="160" autocomplete="off" placeholder="Validateur suivant">
+          </label>
+        </div>
+        <div class="epar-save">
+          <button class="btn btn-primary btn-sm" id="epar-save" type="button">Save</button>
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="storage-title">
         <div class="card-head"><div><h3 class="card-title" id="storage-title">Storage</h3><p class="card-sub">Kept on the server</p></div></div>
         <dl class="facts cols-2">
@@ -971,6 +1005,8 @@
       signingIn: false,
       signinWindow: null,
       seen: {},
+      eparJob: null,
+      eparDirty: false,
     };
 
     /* ---------- Formatting ---------- */
@@ -1176,6 +1212,11 @@
         ui.stopping = false;
         ui.runningSince = null;
       }
+      const job = data.eparapheur || {};
+      if (ui.eparJob && ui.eparJob.running && !job.running) {
+        toast(job.error || "Sent to Eparapheur", job.error ? "error" : "success");
+      }
+      ui.eparJob = job;
 
       renderHeader();
       $("#nav-alert").hidden = !(data.session?.status === "signed_out" || data.session?.has_profile === false);
@@ -1704,9 +1745,11 @@
       const filtered = ui.filter || ui.status !== "all";
       $("#count-history").textContent = filtered ? `${shown.length} / ${runs.length}` : runs.length;
 
+      const epar = ui.data.eparapheur || {};
       const live = ui.data.current_run;
       const key = JSON.stringify([history.map((e) => [e.id || e.started_at, e.status, e.finished_at, (e.files || []).length]), running(), live?.run_id, live?.index,
-        resources().map((r) => r.name), ui.filter, ui.status, ui.historyLimit, ui.data.logged_runs, runBlocked()]);
+        resources().map((r) => r.name), ui.filter, ui.status, ui.historyLimit, ui.data.logged_runs, runBlocked(),
+        epar.running, epar.entry_id, epar.step, epar.sent]);
       if (ui.keys.activity === key) return;
       ui.keys.activity = key;
 
@@ -1810,14 +1853,34 @@
           ? `<span class="rr-state is-active" title="Retrying">${mark("active")}<span class="sr-only">Retrying</span></span>`
           : `<span class="rr-state is-${ok ? "done" : "failed"}" title="${ok ? "Exported" : stopped ? "Stopped" : "Failed"}">${mark(ok ? "done" : "failed")}<span class="sr-only">${ok ? "Exported" : stopped ? "Stopped" : "Failed"}</span></span>`}
         <div style="min-width:0"><p class="rr-name" title="${name}">${name}</p>${body}</div>
-        <div class="rr-side">${canRetry(item, run)
+        <div class="rr-side">${eparButton(item)}${canRetry(item, run)
           ? `<button class="btn btn-secondary btn-xs" type="button" data-retry-one="${esc(item.name)}" data-run="${esc(run.id)}" data-month="${esc(run.month)}" aria-label="Retry ${name}"${blockedAttr()}>${ICON.retry}Retry</button>` : ""}<span class="rr-time">${esc(duration(entry))}</span></div>
       </li>`;
     }
 
     const canRetry = (item, run) => item.state === "ko" && !running() && run.retry.some((name) => sameName(name, item.name));
 
+    function eparButton(item) {
+      if (item.state !== "ok" || !item.entry?.id) return "";
+      const files = item.entry.files || [];
+      const weekly = files.some((file) => isWeekly(file.path));
+      const monthly = files.some((file) => !isWeekly(file.path));
+      if (!weekly || !monthly) return "";
+      const job = ui.data.eparapheur || {};
+      const sent = (job.sent || []).includes(item.entry.id);
+      const busy = Boolean(job.running && job.entry_id === item.entry.id);
+      const label = busy ? (job.step || "Sending") : sent ? "Sent" : "Eparapheur";
+      const title = sent ? "Already sent to Eparapheur" : "Send the monthly and weekly PDFs to Eparapheur";
+      return `<button class="btn btn-secondary btn-xs" type="button" data-epar="${esc(item.entry.id)}" title="${esc(title)}"${busy || sent || job.running ? " disabled" : ""}>${esc(label)}</button>`;
+    }
+
     document.addEventListener("click", (event) => {
+      const epar = event.target.closest("[data-epar]");
+      if (epar) {
+        if (epar.disabled) return;
+        post("/api/eparapheur", { id: epar.dataset.epar }).then(() => refresh()).catch((error) => toast(error.message, "error"));
+        return;
+      }
       const one = event.target.closest("[data-retry-one]");
       if (one) {
         withBusy(one, "Retrying…", () => startRun(one.dataset.month, [one.dataset.retryOne], one.dataset.run));
@@ -2006,7 +2069,23 @@
       renderPurge("files", "Purge files", storage.pdfs ? `Delete ${plural(storage.pdfs, "PDF")} (${bytes(storage.bytes)})?` : "", locked || !storage.bytes);
       renderPurge("history", "Purge history", runs.runs ? `Delete ${plural(runs.runs, "run")} and ${logs.runs === 1 ? "its" : "their"} logs?` : "", locked || !runs.entries);
       renderSignature(data.signature, locked);
+      renderEpar(data.eparapheur);
       renderLogsButtons();
+    }
+
+    function renderEpar(epar) {
+      epar = epar || {};
+      const write = (id, value) => {
+        const field = $(id);
+        if (!field || ui.eparDirty || document.activeElement === field) return;
+        field.value = value || "";
+      };
+      write("#epar-user", epar.username);
+      write("#epar-company", epar.company);
+      write("#epar-provider", epar.provider);
+      write("#epar-approver", epar.approver);
+      const password = $("#epar-password");
+      if (password) password.placeholder = epar.password_set ? "Saved — leave blank to keep it" : "Password";
     }
 
     function renderSignature(signature, locked) {
@@ -2083,6 +2162,29 @@
         : `<button class="btn btn-ghost btn-sm is-danger" type="button" data-purge="${kind}" ${disabled ? "disabled" : ""}>${label}</button>`;
       if (confirming) box.querySelector("[data-confirmed]").focus();
     }
+
+    $("#view-settings").addEventListener("input", (event) => {
+      if (event.target.closest("#epar-fields")) ui.eparDirty = true;
+    });
+
+    $("#epar-save").addEventListener("click", async () => {
+      const button = $("#epar-save");
+      try {
+        ui.settings = await withBusy(button, "Saving…", () => post("/api/eparapheur/settings", {
+          username: $("#epar-user").value,
+          password: $("#epar-password").value,
+          company: $("#epar-company").value,
+          provider: $("#epar-provider").value,
+          approver: $("#epar-approver").value,
+        }));
+        ui.eparDirty = false;
+        $("#epar-password").value = "";
+        toast("Eparapheur settings saved");
+        renderSettings();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
 
     $("#view-settings").addEventListener("click", async (event) => {
       if (event.target.closest("[data-purge-cancel]")) {

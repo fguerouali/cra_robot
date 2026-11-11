@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pypdf import PdfReader
 
+from eparapheur import billable_days, form_settings, save_form, start as start_eparapheur, status as epar_status
 from paths import HAND_FONT, INDEX, LOGS, SIGNIN_PAGE
 from signature import remove_signature, save_signature, signature_status, SIGNATURE
 
@@ -187,6 +188,7 @@ def _state() -> dict:
         "month_value": config["month_value"],
         "signin_url": _signin_url(),
         "signin_screen": SIGNIN_IN_BROWSER,
+        "eparapheur": epar_status(),
     }
 
 
@@ -324,6 +326,30 @@ def _start_batch(month_value: str, only: list[str] | None = None, retry_of: str 
 
     threading.Thread(target=worker, name="export-run", daemon=True).start()
     return True
+
+
+def _queue_eparapheur(entry_id: str) -> None:
+    """Send this successful export's two PDFs to Ersal. The browser opens on this computer."""
+    entry_id = entry_id.strip()
+    if not entry_id:
+        raise ValueError("Choose an export")
+    entry = next((item for item in history() if item.get("id") == entry_id), None)
+    if entry is None:
+        raise ValueError("That export no longer exists")
+    if entry.get("status") != "ok":
+        raise ValueError("Only a successful export can be sent")
+    monthly = weekly = None
+    for raw in entry.get("files") or []:
+        target = _download_target(raw)
+        if target is None or target.suffix.casefold() != ".pdf":
+            continue
+        if "_hebdo" in target.name:
+            weekly = target
+        else:
+            monthly = target
+    if monthly is None or weekly is None:
+        raise ValueError("This export is missing the monthly or the weekly PDF")
+    start_eparapheur(entry_id, monthly, weekly, str(entry.get("month_value") or ""), billable_days(monthly))
 
 
 def _download_target(raw: str) -> Path | None:
@@ -536,6 +562,14 @@ class Handler(BaseHTTPRequestHandler):
                 save_signature_options(payload)
                 self._send(200, "application/json", json.dumps(_settings()).encode())
                 return
+            if path == "/api/eparapheur/settings":
+                save_form(payload)
+                self._send(200, "application/json", json.dumps(_settings()).encode())
+                return
+            if path == "/api/eparapheur":
+                _queue_eparapheur(str(payload.get("id", "")))
+                self._send(202, "application/json", json.dumps(epar_status()).encode())
+                return
             if path == "/api/resources":
                 config = add_resource(str(payload.get("name", "")))
             elif path == "/api/resources/update":
@@ -604,6 +638,7 @@ def _settings() -> dict:
         "logs": {"runs": len(_logged_runs()), "bytes": sum(path.stat().st_size for path in LOGS.glob("*.jsonl")) if LOGS.exists() else 0},
         "signin_url": _signin_url(),
         "signin_screen": SIGNIN_IN_BROWSER,
+        "eparapheur": form_settings(),
     }
 
 
