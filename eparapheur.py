@@ -366,7 +366,7 @@ def transfer(
     _type_into(driver, ("Nombre de jours travaillés", "Nombre de jours travailles"), days)
     _type_into(driver, ("Descriptif de la demande",), description)
     _set_project_code(driver)
-    _choose(driver, "Période de prestation", lambda options: pick_period(options, month_value), month_value)
+    _choose(driver, "Période de prestation", lambda options: pick_period(options, month_value), month_value.split("/")[1])
     _choose(driver, "Validateur suivant", lambda options: pick_choice(options, approver), approver)
     _step("Weekly PDF")
     _click(driver, "Ajout complément")
@@ -587,8 +587,8 @@ def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
     options = []
     opened = time.time() + 3
     while time.time() < opened:
-        options = _options(driver)
-        if options:
+        options = _options(driver, field)
+        if pick(options) if options else None:
             break
         time.sleep(0.2)
     chosen = pick(options) if options else None
@@ -602,12 +602,12 @@ def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
         except WebDriverException:
             pass
         time.sleep(0.6)
-        options = _options(driver)
+        options = _options(driver, field)
         chosen = pick(options) if options else None
     if not chosen:
         sample = ", ".join(options[:8]) or "the list was empty"
         raise RuntimeError(f"Could not choose {label}. Seen: {sample}")
-    _click_option(driver, chosen)
+    _click_option(driver, chosen, field)
 
 
 def _set_project_code(driver: webdriver.Chrome) -> None:
@@ -719,16 +719,80 @@ def _open_arrow(driver: webdriver.Chrome, field) -> None:
         driver.execute_script("arguments[0].click()", field)
 
 
-def _options(driver: webdriver.Chrome) -> list[str]:
+def _options(driver: webdriver.Chrome, field=None) -> list[str]:
+    popup_id = ""
+    if field is not None:
+        try:
+            popup_id = driver.execute_script(
+                """
+                const field = arguments[0];
+                const box = field.closest(".dijitComboBox, .dijitSelect") || field;
+                const owns = field.getAttribute("aria-owns") || field.getAttribute("aria-controls")
+                  || box.getAttribute("aria-owns") || "";
+                if (owns) return owns;
+                const id = box.getAttribute("widgetid") || box.id || field.id || "";
+                return id ? id + "_popup" : "";
+                """,
+                field,
+            ) or ""
+        except WebDriverException:
+            popup_id = ""
     found: list[str] = []
     driver.switch_to.default_content()
-    _collect_options(driver, found, 0)
+    if popup_id:
+        _collect_popup(driver, popup_id, found, 0)
+    else:
+        _collect_options(driver, found, 0)
     driver.switch_to.default_content()
     unique = []
     for option in found:
         if option not in unique:
             unique.append(option)
     return unique
+
+
+_POPUP_ITEMS_JS = """
+const popup = document.getElementById(arguments[0]);
+if (!popup) return [];
+const style = getComputedStyle(popup);
+if (style.display === "none" || style.visibility === "hidden" || !popup.getClientRects().length || popup.offsetHeight < 2) return [];
+const seen = new Set();
+const out = [];
+for (const node of popup.querySelectorAll(".dijitMenuItem, [role='option']")) {
+  const itemStyle = getComputedStyle(node);
+  if (itemStyle.display === "none" || itemStyle.visibility === "hidden") continue;
+  const label = node.querySelector(".dijitMenuItemLabel");
+  const text = ((label && label.innerText) || node.innerText || node.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim();
+  if (!text || text.length > 80 || seen.has(text)) continue;
+  if (/retourne|element|boite de reception/i.test(text.normalize("NFD").replace(/[\\u0300-\\u036f]/g, ""))) continue;
+  seen.add(text);
+  out.push(text);
+}
+return out;
+"""
+
+
+def _collect_popup(driver: webdriver.Chrome, popup_id: str, found: list[str], depth: int) -> None:
+    try:
+        found.extend(driver.execute_script(_POPUP_ITEMS_JS, popup_id) or [])
+    except WebDriverException:
+        pass
+    if found or depth >= 3:
+        return
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        _collect_popup(driver, popup_id, found, depth + 1)
+        if found:
+            return
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return
 
 
 def _collect_options(driver: webdriver.Chrome, found: list[str], depth: int) -> None:
@@ -752,7 +816,7 @@ def _collect_options(driver: webdriver.Chrome, found: list[str], depth: int) -> 
             return
 
 
-def _click_option(driver: webdriver.Chrome, text: str) -> None:
+def _click_option(driver: webdriver.Chrome, text: str, field=None) -> None:
     script = """
     const wanted = arguments[0];
     const norm = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
@@ -768,14 +832,71 @@ def _click_option(driver: webdriver.Chrome, text: str) -> None:
     }
     return null;
     """
+    popup_id = ""
+    if field is not None:
+        try:
+            popup_id = driver.execute_script(
+                """
+                const field = arguments[0];
+                const box = field.closest(".dijitComboBox, .dijitSelect") || field;
+                const owns = field.getAttribute("aria-owns") || field.getAttribute("aria-controls")
+                  || box.getAttribute("aria-owns") || "";
+                if (owns) return owns;
+                const id = box.getAttribute("widgetid") || box.id || field.id || "";
+                return id ? id + "_popup" : "";
+                """,
+                field,
+            ) or ""
+        except WebDriverException:
+            popup_id = ""
     driver.switch_to.default_content()
-    node = _find_option(driver, script, text, 0)
+    node = _find_popup_node(driver, popup_id, text, 0) if popup_id else None
+    if node is None:
+        driver.switch_to.default_content()
+        node = _find_option(driver, script, text, 0)
     if node is None:
         raise RuntimeError(f"The choice “{text}” disappeared from the list")
     try:
         node.click()
     except WebDriverException:
         driver.execute_script("arguments[0].click()", node)
+
+
+def _find_popup_node(driver: webdriver.Chrome, popup_id: str, text: str, depth: int):
+    script = """
+    const popup = document.getElementById(arguments[0]);
+    const wanted = (arguments[1] || "").replace(/\\s+/g, " ").trim().toLowerCase();
+    if (!popup) return null;
+    const norm = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
+    for (const node of popup.querySelectorAll(".dijitMenuItem, [role='option']")) {
+      const label = node.querySelector(".dijitMenuItemLabel");
+      if (norm((label && label.innerText) || node.innerText) === wanted) return node;
+    }
+    return null;
+    """
+    try:
+        found = driver.execute_script(script, popup_id, text)
+    except WebDriverException:
+        found = None
+    if found is not None:
+        return found
+    if depth >= 3:
+        return None
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        found = _find_popup_node(driver, popup_id, text, depth + 1)
+        if found is not None:
+            return found
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return None
+    return None
 
 
 def _find_option(driver: webdriver.Chrome, script: str, text: str, depth: int):
