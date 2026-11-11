@@ -43,7 +43,8 @@ _MONTHS = (
 )
 
 _lock = threading.Lock()
-_job = {"running": False, "entry_id": "", "step": "", "error": ""}
+_job = {"running": False, "entry_id": "", "run_id": "", "step": "", "error": ""}
+_listener = None
 
 _FIND_JS = """
 const wanted = arguments[0];
@@ -160,7 +161,7 @@ def status() -> dict:
     return job
 
 
-def start(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str) -> None:
+def start(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str, run_id: str = "", resource_name: str = "", on_log=None) -> None:
     """Start the send on a background thread. Raises ValueError when it cannot start."""
     if not re.fullmatch(r"(0[1-9]|1[0-2])/\d{4}", month_value or ""):
         raise ValueError("This export has no month")
@@ -181,11 +182,13 @@ def start(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: st
     with _lock:
         if _job["running"]:
             raise ValueError("An Eparapheur send is already running")
-        _job.update(running=True, entry_id=entry_id, step="Starting", error="")
+        _job.update(running=True, entry_id=entry_id, run_id=run_id, step="Starting", error="")
+        global _listener
+        _listener = on_log
     threading.Thread(
         target=_run,
         name="eparapheur",
-        args=(entry_id, monthly, weekly, month_value, days, settings),
+        args=(entry_id, monthly, weekly, month_value, days, settings, resource_name),
         daemon=True,
     ).start()
 
@@ -239,9 +242,11 @@ def pick_period(options: list[str], month_value: str) -> str | None:
     return best
 
 
-def _run(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str, settings: dict) -> None:
+def _run(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str, settings: dict, resource_name: str) -> None:
     driver = None
     error = ""
+    who = resource_name or "this export"
+    _emit(f"Eparapheur · {who} · Starting")
     try:
         driver = _chrome()
         transfer(
@@ -261,9 +266,11 @@ def _run(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str
         sent[entry_id] = datetime.now(timezone.utc).isoformat()
         data["sent"] = sent
         _save(data)
+        _emit(f"Eparapheur · {who} · Sent to Ersal", "ok")
     except Exception as exc:
         traceback.print_exc()
         error = _readable(exc)
+        _emit(f"Eparapheur · {who} · {error}", "error")
         if driver is not None:
             _snap(driver)
     finally:
@@ -273,7 +280,9 @@ def _run(entry_id: str, monthly: Path, weekly: Path, month_value: str, days: str
             except Exception:
                 pass
         with _lock:
-            _job.update(running=False, step="", error=error)
+            global _listener
+            _listener = None
+            _job.update(running=False, run_id="", step="", error=error)
 
 
 def transfer(
@@ -339,10 +348,35 @@ def _open(driver: webdriver.Chrome, url: str) -> None:
         print("eparapheur: the page is still loading; continuing", flush=True)
 
 
+def _emit(text: str, level: str = "step") -> None:
+    """One run-log line. A step also renames the button, without logging twice."""
+    if level == "step":
+        _remember(text.rsplit(" · ", 1)[-1])
+    else:
+        print(f"eparapheur: {text}", flush=True)
+    _notify(text, level)
+
+
 def _step(text: str) -> None:
     print(f"eparapheur: {text}", flush=True)
+    _remember(text)
+    _notify(text, "step")
+
+
+def _remember(text: str) -> None:
     with _lock:
         _job["step"] = text
+
+
+def _notify(text: str, level: str) -> None:
+    with _lock:
+        callback = _listener
+    if callback is None:
+        return
+    try:
+        callback(text, level)
+    except Exception:
+        traceback.print_exc()
 
 
 def _login(driver: webdriver.Chrome, username: str, password: str) -> None:

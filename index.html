@@ -1802,8 +1802,9 @@
       const withFiles = run.items.filter((i) => (i.entry.files || []).length);
       const zip = withFiles.length
         ? `<a class="btn btn-secondary btn-sm" href="${esc(zipUrl(run, withFiles))}" data-zip download>${ICON.download}Download all</a>` : "";
+      const eparLive = Boolean(ui.data.eparapheur?.running && ui.data.eparapheur.run_id === run.id);
       const logs = (ui.data.logged_runs || []).includes(run.id)
-        ? `<button class="btn btn-ghost btn-sm" type="button" data-open-logs data-logs-run="${esc(run.id)}" aria-label="Logs for run ${esc(run.id)}">${ICON.logs}Logs</button>` : "";
+        ? `<button class="btn btn-ghost btn-sm" type="button" data-open-logs data-logs-run="${esc(run.id)}" aria-label="Logs for run ${esc(run.id)}">${ICON.logs}Logs${eparLive ? '<span class="live-dot" aria-hidden="true"></span>' : ""}</button>` : "";
       return `<li class="run is-${state}${extraClass}">
         <div class="run-head">
           <div class="run-title">${runIdButton(run.id)}${pill}${run.month ? `<span class="tag">${esc(run.month)}</span>` : ""}</div>
@@ -2415,7 +2416,8 @@
     const logTime = (at) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     const logsLive = (target) => target === "session"
       ? Boolean(ui.data?.session?.checking)
-      : running() && ui.data?.current_run?.run_id === target;
+      : (running() && ui.data?.current_run?.run_id === target)
+        || Boolean(ui.data?.eparapheur?.running && ui.data.eparapheur.run_id === target);
 
     /* The top block offers the running run's log, or the failed run's while its alert shows. */
     function renderLogsButtons() {

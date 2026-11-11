@@ -349,7 +349,33 @@ def _queue_eparapheur(entry_id: str) -> None:
             monthly = target
     if monthly is None or weekly is None:
         raise ValueError("This export is missing the monthly or the weekly PDF")
-    start_eparapheur(entry_id, monthly, weekly, str(entry.get("month_value") or ""), billable_days(monthly))
+    run_id = str(entry.get("run_id") or "")
+    resource_name = str(entry.get("resource_name") or "")
+    start_eparapheur(
+        entry_id,
+        monthly,
+        weekly,
+        str(entry.get("month_value") or ""),
+        billable_days(monthly),
+        run_id=run_id,
+        resource_name=resource_name,
+        on_log=_epar_logger(run_id, resource_name),
+    )
+
+
+def _epar_logger(run_id: str, resource_name: str):
+    """Append Eparapheur lines to this run's log, the file the Logs button reads."""
+    path = _run_log(run_id)
+    who = resource_name or "this export"
+
+    def write(text: str, level: str = "step") -> None:
+        if path is None:
+            return
+        _log_begin(path)
+        line = text if text.startswith("Eparapheur ·") else f"Eparapheur · {who} · {text}"
+        log(line, level)
+
+    return write
 
 
 def _download_target(raw: str) -> Path | None:
@@ -460,7 +486,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(400, "application/json", b'{"error": "Unknown run ID"}')
                     return
                 with _lock:
-                    active = _running and bool(_current_run) and _current_run.get("run_id") == run_id
+                    exporting = _running and bool(_current_run) and _current_run.get("run_id") == run_id
+                sending = epar_status()
+                active = exporting or bool(sending.get("running") and sending.get("run_id") == run_id)
                 body = _logs(path, after, active)
             self._send(200, "application/json", json.dumps(body).encode())
             return
