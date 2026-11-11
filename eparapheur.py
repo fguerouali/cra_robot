@@ -332,7 +332,7 @@ def transfer(
     _step("Signing in")
     _login(driver, username, password)
     _step("New request")
-    _click(driver, "nouvelle demande")
+    _open_new_request(driver)
     _step("Monthly PDF")
     _upload(driver, monthly)
     _step("Document type")
@@ -483,10 +483,60 @@ def _submit_login(driver: webdriver.Chrome, secret) -> None:
             pass
 
 
+def _open_new_request(driver: webdriver.Chrome) -> None:
+    """The file field exists only inside the form opened by Ajouter Nouvelle Demande."""
+    try:
+        _press(driver, "Ajouter Nouvelle Demande", exact=True, timeout=12)
+    except RuntimeError:
+        _press(driver, "nouvelle demande", timeout=8)
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if _add_form_open(driver):
+            return
+        time.sleep(0.4)
+    raise RuntimeError(f"The new request form did not open. Chrome showed {_page_clue(driver)}")
+
+
+def _add_form_open(driver: webdriver.Chrome) -> bool:
+    return (
+        _page_has(driver, "nom de fichier")
+        or _page_has(driver, "choisir des fichiers")
+        or _page_has(driver, "type du document")
+    )
+
+
+def _press(driver: webdriver.Chrome, text: str, exact: bool = False, timeout: float = 20) -> None:
+    """Dojo toolbar buttons ignore a plain click on the label."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        node = _find(driver, text, exact)
+        if node is not None and not _disabled(driver, node):
+            try:
+                driver.execute_script(
+                    """
+                    const node = arguments[0];
+                    const button = node.closest(".dijitButton, .dijitDropDownButton, button, a, [role='button']") || node;
+                    button.scrollIntoView({block: "center", inline: "nearest"});
+                    const target = button === node ? node : button;
+                    for (const type of ["mousedown", "mouseup", "click"]) {
+                      target.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+                    }
+                    """,
+                    node,
+                )
+                return
+            except StaleElementReferenceException:
+                pass
+            except WebDriverException:
+                pass
+        time.sleep(0.3)
+    raise RuntimeError(f"Could not find “{text}” on Ersal")
+
+
 def _upload(driver: webdriver.Chrome, path: Path) -> None:
     target = _file_input(driver)
     if target is None:
-        raise RuntimeError("The Ersal file field did not open")
+        raise RuntimeError(f"The Ersal file field did not open. Chrome showed {_page_clue(driver)}")
     driver.execute_script(
         """
         arguments[0].style.setProperty('display', 'block', 'important');
@@ -906,21 +956,34 @@ def _file_input(driver: webdriver.Chrome):
     deadline = time.time() + 20
     while time.time() < deadline:
         driver.switch_to.default_content()
-        inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-        if inputs:
-            return inputs[-1]
-        frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
-        for frame in frames:
-            driver.switch_to.default_content()
-            try:
-                driver.switch_to.frame(frame)
-            except WebDriverException:
-                continue
-            inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-            if inputs:
-                return inputs[-1]
+        found = _file_input_here(driver, 0)
+        if found is not None:
+            return found
         time.sleep(0.3)
     driver.switch_to.default_content()
+    return None
+
+
+def _file_input_here(driver: webdriver.Chrome, depth: int):
+    inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+    if inputs:
+        return inputs[-1]
+    if depth >= 3:
+        return None
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        found = _file_input_here(driver, depth + 1)
+        if found is not None:
+            return found
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return None
     return None
 
 
@@ -992,19 +1055,29 @@ def _row_visible(driver: webdriver.Chrome, filename: str) -> bool:
 
 
 def _visible_text(driver: webdriver.Chrome) -> str:
-    parts = []
     driver.switch_to.default_content()
+    parts: list[str] = []
+    _collect_text(driver, parts, 0)
+    driver.switch_to.default_content()
+    return "\n".join(parts)
+
+
+def _collect_text(driver: webdriver.Chrome, parts: list[str], depth: int) -> None:
     parts.append(_body_text(driver))
+    if depth >= 3:
+        return
     frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
     for frame in frames:
-        driver.switch_to.default_content()
         try:
             driver.switch_to.frame(frame)
         except WebDriverException:
             continue
-        parts.append(_body_text(driver))
-    driver.switch_to.default_content()
-    return "\n".join(parts)
+        _collect_text(driver, parts, depth + 1)
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return
 
 
 def _body_text(driver: webdriver.Chrome) -> str:
