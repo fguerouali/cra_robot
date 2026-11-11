@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pypdf import PdfReader
 
-from paths import HAND_FONT, INDEX, LOGS
+from paths import HAND_FONT, INDEX, LOGS, SIGNIN_PAGE
 from signature import remove_signature, save_signature, signature_status, SIGNATURE
 
 from main import (
@@ -38,6 +38,8 @@ from main import (
     remove_resource,
     RUN_ID,
     SHOTS,
+    SIGNIN_IN_BROWSER,
+    screen_sign_in,
     run_batch,
     run_month,
     request_stop,
@@ -184,6 +186,7 @@ def _state() -> dict:
         "resources": config["resources"],
         "month_value": config["month_value"],
         "signin_url": _signin_url(),
+        "signin_screen": SIGNIN_IN_BROWSER,
     }
 
 
@@ -382,6 +385,17 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if parsed.path == "/signin" and SIGNIN_IN_BROWSER:
+            self._send(200, "text/html; charset=utf-8", SIGNIN_PAGE.read_bytes())
+            return
+        if parsed.path == "/api/session/screen" and SIGNIN_IN_BROWSER:
+            try:
+                picture = screen_sign_in()
+            except ValueError as exc:
+                self._send(409, "application/json", json.dumps({"error": str(exc)}).encode())
+                return
+            self._send(200, "image/jpeg", picture)
+            return
         if parsed.path == "/api/state":
             self._send(200, "application/json", json.dumps(_state()).encode())
             return
@@ -496,6 +510,8 @@ class Handler(BaseHTTPRequestHandler):
                 kind = str(payload.get("kind", ""))
                 if kind == "click":
                     point_sign_in(float(payload.get("x", 0)), float(payload.get("y", 0)))
+                elif kind == "tap":
+                    point_sign_in(float(payload.get("x", 0)), float(payload.get("y", 0)), on_page=True)
                 elif kind == "key":
                     key_sign_in(
                         str(payload.get("key", "")),
@@ -587,6 +603,7 @@ def _settings() -> dict:
         "history": {"runs": len({entry.get("run_id") for entry in entries}), "entries": len(entries)},
         "logs": {"runs": len(_logged_runs()), "bytes": sum(path.stat().st_size for path in LOGS.glob("*.jsonl")) if LOGS.exists() else 0},
         "signin_url": _signin_url(),
+        "signin_screen": SIGNIN_IN_BROWSER,
     }
 
 

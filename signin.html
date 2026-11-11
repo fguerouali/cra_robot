@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion Power BI</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; }
+  #hint { position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 2; margin: 0;
+    display: flex; align-items: center; padding: 0 14px; box-sizing: border-box;
+    background: #f5c518; color: #111; font: 700 16px/1.2 sans-serif; }
+  #pad { position: fixed; top: 52px; left: 0; right: 0; bottom: 0; display: flex;
+    align-items: flex-start; justify-content: center; outline: none; overflow: auto; }
+  #screen { max-width: 100%; max-height: 100%; cursor: pointer; user-select: none; -webkit-user-drag: none; }
+</style>
+</head>
+<body>
+<p id="hint">Ouverture de Power BI…</p>
+<div id="pad" tabindex="0"><img id="screen" alt="Power BI" draggable="false"></div>
+<script>
+(function () {
+  // The server signs in with a headless Chrome. This page shows its picture and forwards clicks and keys to it.
+  var pad = document.getElementById("pad");
+  var screen = document.getElementById("screen");
+  var hint = document.getElementById("hint");
+  var READY = "Clique dans l'image et tape au clavier (Ctrl+V pour coller). L'Authenticator se fait ici.";
+  var chain = Promise.resolve();
+  var done = false;
+
+  function send(body) {
+    chain = chain.then(function () {
+      return fetch("/api/session/input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      }).then(function (response) {
+        if (!response.ok) hint.textContent = "Attends que Power BI soit affiché, puis réessaie.";
+      });
+    }).catch(function () {
+      hint.textContent = "Attends que Power BI soit affiché, puis réessaie.";
+    });
+  }
+
+  function refreshScreen() {
+    if (done) return;
+    fetch("/api/session/screen?t=" + Date.now(), { cache: "no-store" }).then(function (response) {
+      if (!response.ok) throw new Error("not ready");
+      return response.blob();
+    }).then(function (blob) {
+      var old = screen.src;
+      screen.src = URL.createObjectURL(blob);
+      if (old) URL.revokeObjectURL(old);
+    }).catch(function () { /* the sign-in browser is still opening */ }).then(function () {
+      setTimeout(refreshScreen, 500);
+    });
+  }
+
+  screen.addEventListener("pointerdown", function (event) {
+    event.preventDefault();
+    pad.focus();
+    var box = screen.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    send({ kind: "tap", x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height });
+  });
+
+  function sendKey(event, down) {
+    var text = event.key && event.key.length === 1 && !event.ctrlKey && !event.metaKey ? event.key : "";
+    send({ kind: "key", key: event.key || "", code: event.code || "", keyCode: event.keyCode || 0, down: down, text: text });
+  }
+  pad.addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") return; // handled by paste
+    event.preventDefault();
+    sendKey(event, true);
+  });
+  pad.addEventListener("keyup", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") return;
+    event.preventDefault();
+    sendKey(event, false);
+  });
+  pad.addEventListener("paste", function (event) {
+    event.preventDefault();
+    var text = (event.clipboardData && event.clipboardData.getData("text")) || "";
+    Array.from(text.replace(/[\r\n]/g, "")).forEach(function (ch) {
+      send({ kind: "key", key: ch, code: "", keyCode: 0, down: true, text: ch });
+      send({ kind: "key", key: ch, code: "", keyCode: 0, down: false, text: "" });
+    });
+  });
+
+  function watch() {
+    fetch("/api/state", { cache: "no-store" }).then(function (response) { return response.json(); }).then(function (data) {
+      var session = (data && data.session) || {};
+      if (session.checking && session.task === "signin") {
+        setTimeout(watch, 2000);
+        return;
+      }
+      done = true;
+      hint.textContent = session.status === "healthy"
+        ? "Connecté à Power BI. Tu peux fermer cet onglet."
+        : "La connexion s'est arrêtée. Retourne sur CRA Exports et clique Sign in.";
+      try { window.close(); } catch (e) { /* the hint stays */ }
+    }).catch(function () { setTimeout(watch, 2000); });
+  }
+
+  function openPowerBI() {
+    fetch("/api/state", { cache: "no-store" }).then(function (response) { return response.json(); }).then(function (data) {
+      var session = (data && data.session) || {};
+      if (session.checking && session.task === "signin") return;
+      return fetch("/api/session/signin", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    }).then(function () {
+      hint.textContent = READY;
+      setTimeout(watch, 3000);
+    }).catch(function () {
+      hint.textContent = "Recharge la page CRA, puis clique Sign in.";
+    });
+  }
+
+  pad.focus();
+  refreshScreen();
+  openPowerBI();
+})();
+</script>
+</body>
+</html>

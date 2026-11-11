@@ -1193,7 +1193,8 @@
       return session.status === "signed_out" || session.has_profile === false;
     };
     const signingIn = () => Boolean(ui.signingIn || (ui.data?.session?.checking && ui.data.session.task === "signin"));
-    const localSignIn = () => location.hostname === "127.0.0.1" || location.hostname === "localhost";
+    // signin_screen: the server signs in headless and serves its picture at /signin, even on its own desktop.
+    const localSignIn = () => !ui.data?.signin_screen && (location.hostname === "127.0.0.1" || location.hostname === "localhost");
     const signinUrl = () => localSignIn() ? "" : location.origin + "/signin";
     const openSignInScreen = () => {
       const url = signinUrl();

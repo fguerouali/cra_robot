@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -42,6 +43,8 @@ from workflow import (
 
 _signin_lock = threading.RLock()
 _signin_driver: webdriver.Chrome | None = None
+# No desktop to show Chrome on (a server reached from another PC): sign in headless and show its picture in the app.
+SIGNIN_IN_BROWSER = os.getenv("SIGNIN_IN_BROWSER", "").strip().lower() in ("1", "true", "yes")
 POWER_BI_HOME = "https://app.powerbi.com/home"
 SIGN_OUT_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/logout"
 SIGN_IN_ORIGINS = (
@@ -940,14 +943,35 @@ def _submit_when_ready(driver: webdriver.Chrome, kind: str, text: str, timeout: 
     return ""
 
 
-def point_sign_in(x: float, y: float) -> None:
-    """Click where the person clicked on the sign-in picture. The remote desktop does not receive the pointer."""
+def screen_sign_in() -> bytes:
+    """JPEG of the open sign-in page, for the in-app sign-in screen."""
     with _signin_lock:
         driver = _signin_driver
         if driver is None:
             raise ValueError("L'écran de connexion n'est pas encore ouvert")
         try:
-            vx, vy = _picture_to_page(driver, float(x), float(y))
+            _focus_live_window(driver)
+            shot = driver.execute_cdp_cmd("Page.captureScreenshot", {"format": "jpeg", "quality": 70})
+        except (WebDriverException, NoSuchWindowException) as exc:
+            raise ValueError("L'écran ne répond pas encore") from exc
+    return base64.b64decode(shot["data"])
+
+
+def point_sign_in(x: float, y: float, on_page: bool = False) -> None:
+    """Click where the person clicked on the sign-in picture. The remote desktop does not receive the pointer.
+
+    `on_page`: x and y are fractions (0..1) of the page picture from screen_sign_in, not framebuffer pixels.
+    """
+    with _signin_lock:
+        driver = _signin_driver
+        if driver is None:
+            raise ValueError("L'écran de connexion n'est pas encore ouvert")
+        try:
+            if on_page:
+                size = driver.execute_script("return [window.innerWidth, window.innerHeight]")
+                vx, vy = float(x) * float(size[0]), float(y) * float(size[1])
+            else:
+                vx, vy = _picture_to_page(driver, float(x), float(y))
             for event_type, buttons, clicks in (("mouseMoved", 0, 0), ("mousePressed", 1, 1), ("mouseReleased", 0, 1)):
                 driver.execute_cdp_cmd(
                     "Input.dispatchMouseEvent",
@@ -1011,7 +1035,7 @@ def sign_in(email: str = "", password: str = "", timeout: float = 600) -> dict:
     try:
         _set_step("screen")
         say("Opening Power BI")
-        driver = _browser(headless=False)
+        driver = _browser(headless=SIGNIN_IN_BROWSER)
         with _signin_lock:
             _signin_driver = driver
         driver.get(POWER_BI_HOME)
