@@ -18,7 +18,10 @@ param(
     [string]$AllowFrom = "Any",
     [string]$TaskName = "CRA Robot",
     [string]$RunnerDir = "C:\actions-runner",
-    [string]$RunnerLabel = "cra-rdp"
+    [string]$RunnerLabel = "cra-rdp",
+    # e.g. http://10.10.211.234:8081. SYSTEM (the runner) and the app's chromedriver download do not
+    # see the proxy set in the user's Internet options, so it is passed to them explicitly.
+    [string]$Proxy = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,6 +63,7 @@ set APP_DATA=$Root\data
 set APP_HOST=$ListenAddress
 set APP_PORT=$Port
 set SIGNIN_IN_BROWSER=1
+$(if ($Proxy) { "set HTTPS_PROXY=$Proxy`r`nset HTTP_PROXY=$Proxy`r`nset NO_PROXY=localhost,127.0.0.1" })
 cd /d "$Root\app"
 "$Root\venv\Scripts\python.exe" -u "$Root\app\server.py" >> "$Root\server.log" 2>&1
 "@ | Set-Content -Encoding ascii "$Root\start-app.cmd"
@@ -97,6 +101,11 @@ if (-not $RunnerToken) {
             --labels $RunnerLabel --work _work --runasservice --windowslogonaccount "NT AUTHORITY\SYSTEM" --replace
         if ($LASTEXITCODE -ne 0) { throw "Runner configuration failed (expired token?)." }
     } finally { Pop-Location }
+}
+if ($Proxy -and (Test-Path "$RunnerDir\.runner")) {
+    # The runner reads .env at start and passes it on to jobs (pip install in deploy.ps1).
+    "https_proxy=$Proxy`nhttp_proxy=$Proxy`nno_proxy=localhost,127.0.0.1" | Set-Content -Encoding ascii "$RunnerDir\.env"
+    Get-Service "actions.runner.*" | Restart-Service
 }
 
 # --- First deploy from this copy of the repo ----------------------------------------------------
