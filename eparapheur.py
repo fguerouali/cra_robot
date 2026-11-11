@@ -21,7 +21,6 @@ from pathlib import Path
 from pypdf import PdfReader
 from selenium import webdriver
 from selenium.common.exceptions import (
-    ElementClickInterceptedException,
     StaleElementReferenceException,
     TimeoutException,
     WebDriverException,
@@ -419,12 +418,18 @@ def _upload(driver: webdriver.Chrome, path: Path) -> None:
         arguments[0].style.setProperty('display', 'block', 'important');
         arguments[0].style.setProperty('visibility', 'visible', 'important');
         arguments[0].style.setProperty('opacity', '1', 'important');
-        arguments[0].style.setProperty('height', '24px', 'important');
-        arguments[0].style.setProperty('width', '24px', 'important');
+        arguments[0].style.setProperty('height', '40px', 'important');
+        arguments[0].style.setProperty('width', '240px', 'important');
+        arguments[0].style.setProperty('position', 'fixed', 'important');
+        arguments[0].style.setProperty('z-index', '2147483647', 'important');
         """,
         target,
     )
-    target.send_keys(str(path.resolve()))
+    file_path = str(path.resolve())
+    try:
+        target.send_keys(file_path)
+    except WebDriverException:
+        target.send_keys(file_path)
 
 
 def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
@@ -475,15 +480,40 @@ def _fill_if_present(driver: webdriver.Chrome, label: str, value: str) -> None:
 
 
 def _write(driver: webdriver.Chrome, field, value: str) -> None:
-    driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'})", field)
+    """Type into a field. Ersal often leaves the real input hidden behind its label."""
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        el.scrollIntoView({block: 'center', inline: 'nearest'});
+        el.removeAttribute('readonly');
+        el.removeAttribute('disabled');
+        el.style.setProperty('display', 'block', 'important');
+        el.style.setProperty('visibility', 'visible', 'important');
+        el.style.setProperty('opacity', '1', 'important');
+        el.focus();
+        """,
+        field,
+    )
     try:
-        field.click()
+        field.send_keys(Keys.CONTROL, "a")
+        field.send_keys(Keys.DELETE)
+        field.send_keys(value)
+        field.send_keys(Keys.TAB)
+        return
     except WebDriverException:
-        driver.execute_script("arguments[0].focus()", field)
-    field.send_keys(Keys.CONTROL, "a")
-    field.send_keys(Keys.DELETE)
-    field.send_keys(value)
-    field.send_keys(Keys.TAB)
+        pass
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        const value = arguments[1];
+        el.focus();
+        el.value = value;
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+        """,
+        field,
+        value,
+    )
 
 
 def _open_arrow(driver: webdriver.Chrome, field) -> None:
@@ -500,8 +530,12 @@ def _open_arrow(driver: webdriver.Chrome, field) -> None:
             arrow.click()
             return
         except WebDriverException:
-            pass
-    field.click()
+            driver.execute_script("arguments[0].click()", arrow)
+            return
+    try:
+        field.click()
+    except WebDriverException:
+        driver.execute_script("arguments[0].click()", field)
 
 
 def _options(driver: webdriver.Chrome) -> list[str]:
@@ -550,7 +584,10 @@ def _click_option(driver: webdriver.Chrome, text: str) -> None:
                 break
     if node is None:
         raise RuntimeError(f"The choice “{text}” disappeared from the list")
-    node.click()
+    try:
+        node.click()
+    except WebDriverException:
+        driver.execute_script("arguments[0].click()", node)
 
 
 def _wait_for_row(driver: webdriver.Chrome, filename: str) -> None:
@@ -684,11 +721,14 @@ def _click(driver: webdriver.Chrome, text: str, exact: bool = False, timeout: fl
                 driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'})", node)
                 node.click()
                 return
-            except ElementClickInterceptedException:
-                driver.execute_script("arguments[0].click()", node)
-                return
             except StaleElementReferenceException:
                 pass
+            except WebDriverException:
+                try:
+                    driver.execute_script("arguments[0].click()", node)
+                    return
+                except WebDriverException:
+                    pass
         time.sleep(0.3)
     raise RuntimeError(f"Could not find “{text}” on Ersal")
 
