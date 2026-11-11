@@ -83,36 +83,58 @@ _FIELD_JS = """
 const wanted = arguments[0];
 const norm = (value) => (value || "")
   .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-  .replace(/[:*]/g, " ").replace(/\\s+/g, " ").trim().toLowerCase();
+  .replace(/[*＊✱∗﹡:：]/g, " ").replace(/\\s+/g, " ").trim().toLowerCase();
 const target = norm(wanted);
 const own = (node) => norm([...node.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" "));
-let label = null;
-let labelLen = Infinity;
-for (const node of document.querySelectorAll("label, span, td, div, legend")) {
-  const text = own(node) || (node.children.length ? "" : norm(node.textContent));
-  if (!text || text.length > 80) continue;
-  if (text !== target && !text.startsWith(target)) continue;
-  if (text.length < labelLen) { label = node; labelLen = text.length; }
-}
-if (!label) return null;
-const usable = (el) => {
-  if (!el || !el.matches || !el.matches("input, textarea, select")) return false;
-  const type = (el.getAttribute("type") || "").toLowerCase();
-  if (["hidden", "file", "checkbox", "radio", "submit", "button"].includes(type)) return false;
-  const style = getComputedStyle(el);
-  if (style.display === "none" || style.visibility === "hidden" || !el.getClientRects().length) return false;
-  return el.offsetWidth > 2 && el.offsetHeight > 2;
+const shown = (node) => {
+  if (!node) return false;
+  const style = getComputedStyle(node);
+  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+  return !!node.getClientRects().length && node.offsetWidth > 2 && node.offsetHeight > 2;
 };
-let node = label;
-for (let depth = 0; depth < 6 && node; depth += 1) {
-  let sib = node.nextElementSibling;
-  while (sib) {
-    if (usable(sib)) return sib;
-    const inner = sib.querySelector ? [...sib.querySelectorAll("input, textarea, select")].find(usable) : null;
-    if (inner) return inner;
-    sib = sib.nextElementSibling;
+const textOf = (node) => own(node) || (node.children.length ? "" : norm(node.textContent));
+const matches = (text) => text === target || text.startsWith(target) || text.endsWith(target) || text.includes(" " + target);
+const controlIn = (root) => {
+  if (!root || !root.querySelector) return null;
+  const box = root.matches(".dijitComboBox, .dijitSelect, [role='combobox']")
+    ? root
+    : root.querySelector(".dijitComboBox, .dijitSelect, [role='combobox']");
+  if (box && shown(box)) {
+    return box.querySelector("input.dijitInputInner")
+      || [...box.querySelectorAll("input, textarea")].find((el) => !el.classList.contains("dijitArrowButtonInner") && (el.getAttribute("type") || "text").toLowerCase() !== "hidden")
+      || box;
   }
-  node = node.parentElement;
+  const field = [...root.querySelectorAll("input, textarea, select")].find((el) => {
+    const type = (el.getAttribute("type") || "").toLowerCase();
+    return !["hidden", "file", "checkbox", "radio", "submit", "button"].includes(type) && shown(el);
+  });
+  return field || null;
+};
+const labels = [];
+for (const node of document.querySelectorAll("label, span, td, div, legend")) {
+  const text = textOf(node);
+  if (!text || text.length > 80 || !matches(text) || !shown(node)) continue;
+  labels.push(node);
+}
+labels.sort((a, b) => textOf(a).length - textOf(b).length);
+for (const label of labels) {
+  const owner = label.closest("label");
+  if (owner && owner.htmlFor) {
+    const linked = document.getElementById(owner.htmlFor);
+    const box = linked && linked.closest ? linked.closest(".dijitComboBox, .dijitSelect, [role='combobox']") : null;
+    const resolved = (box && controlIn(box)) || (linked && linked.matches && linked.matches("input, textarea, select") && shown(linked) ? linked : null);
+    if (resolved) return resolved;
+  }
+  let node = label;
+  for (let depth = 0; depth < 8 && node; depth += 1) {
+    let sib = node.nextElementSibling;
+    while (sib) {
+      const found = controlIn(sib) || (sib.matches && sib.matches("input, textarea, select") && shown(sib) ? sib : null);
+      if (found) return found;
+      sib = sib.nextElementSibling;
+    }
+    node = node.parentElement;
+  }
 }
 return null;
 """
@@ -485,9 +507,15 @@ def _upload(driver: webdriver.Chrome, path: Path) -> None:
 
 
 def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
-    field = _find_field(driver, label)
+    deadline = time.time() + 20
+    field = None
+    while time.time() < deadline:
+        field = _find_field(driver, label)
+        if field is not None:
+            break
+        time.sleep(0.4)
     if field is None:
-        raise RuntimeError(f"Could not find {label} on the Ersal form")
+        raise RuntimeError(f"Could not find {label} on the Ersal form. Chrome showed {_page_clue(driver)}")
     _open_arrow(driver, field)
     time.sleep(0.5)
     options = _options(driver)
@@ -846,20 +874,31 @@ def _find(driver: webdriver.Chrome, text: str, exact: bool):
 
 def _find_field(driver: webdriver.Chrome, label: str):
     driver.switch_to.default_content()
-    found = driver.execute_script(_FIELD_JS, label)
+    return _find_field_here(driver, label, 0)
+
+
+def _find_field_here(driver: webdriver.Chrome, label: str, depth: int):
+    try:
+        found = driver.execute_script(_FIELD_JS, label)
+    except WebDriverException:
+        found = None
     if found is not None:
         return found
+    if depth >= 3:
+        return None
     frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
     for frame in frames:
-        driver.switch_to.default_content()
         try:
             driver.switch_to.frame(frame)
         except WebDriverException:
             continue
-        found = driver.execute_script(_FIELD_JS, label)
+        found = _find_field_here(driver, label, depth + 1)
         if found is not None:
             return found
-    driver.switch_to.default_content()
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
     return None
 
 
