@@ -145,16 +145,19 @@ return null;
 _OPTIONS_JS = """
 const seen = new Set();
 const out = [];
-const menus = [...document.querySelectorAll(".dijitMenuPopup, .dijitComboBoxMenu, [role='listbox']")].filter((menu) => {
+const visibleMenu = (menu) => {
   const style = getComputedStyle(menu);
   return style.display !== "none" && style.visibility !== "hidden" && menu.getClientRects().length && menu.offsetHeight > 2;
-});
+};
+const popups = [...document.querySelectorAll(".dijitPopup, .dijitMenuPopup")].filter(visibleMenu);
+const menus = popups.length ? popups : [...document.querySelectorAll(".dijitComboBoxMenu, [role='listbox']")].filter(visibleMenu);
 for (const menu of menus) {
   for (const node of menu.querySelectorAll(".dijitMenuItem, [role='option']")) {
     const style = getComputedStyle(node);
     if (style.display === "none" || style.visibility === "hidden" || !node.getClientRects().length) continue;
     const text = (node.innerText || "").replace(/\\s+/g, " ").trim();
     if (!text || text.length > 80 || seen.has(text)) continue;
+    if (/retourne|element|boite de reception/i.test(text.normalize("NFD").replace(/[\\u0300-\\u036f]/g, ""))) continue;
     seen.add(text);
     out.push(text);
   }
@@ -594,6 +597,10 @@ def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
         if field is None:
             raise RuntimeError(f"Could not find {label} on the Ersal form")
         _write(driver, field, hint)
+        try:
+            field.send_keys(Keys.ARROW_DOWN)
+        except WebDriverException:
+            pass
         time.sleep(0.6)
         options = _options(driver)
         chosen = pick(options) if options else None
@@ -687,6 +694,10 @@ def _fire_input(driver: webdriver.Chrome, field) -> None:
 
 
 def _open_arrow(driver: webdriver.Chrome, field) -> None:
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'})", field)
+    except WebDriverException:
+        pass
     arrow = driver.execute_script(
         """
         const field = arguments[0];
@@ -746,7 +757,9 @@ def _click_option(driver: webdriver.Chrome, text: str) -> None:
     const wanted = arguments[0];
     const norm = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
     const target = norm(wanted);
-    const menus = [...document.querySelectorAll(".dijitMenuPopup, .dijitComboBoxMenu, [role='listbox']")];
+    const visibleMenu = (menu) => menu.getClientRects().length && menu.offsetHeight > 2;
+    const popups = [...document.querySelectorAll(".dijitPopup, .dijitMenuPopup")].filter(visibleMenu);
+    const menus = popups.length ? popups : [...document.querySelectorAll(".dijitComboBoxMenu, [role='listbox']")].filter(visibleMenu);
     for (const menu of menus) {
       for (const node of menu.querySelectorAll(".dijitMenuItem, [role='option']")) {
         if (!node.getClientRects().length) continue;
