@@ -95,15 +95,24 @@ for (const node of document.querySelectorAll("label, span, td, div, legend")) {
   if (text.length < labelLen) { label = node; labelLen = text.length; }
 }
 if (!label) return null;
-let scope = label;
-for (let depth = 0; depth < 6 && scope; depth += 1) {
-  scope = scope.parentElement;
-  if (!scope) break;
-  const inputs = [...scope.querySelectorAll("input, textarea, select")].filter((el) => {
-    const type = (el.getAttribute("type") || "").toLowerCase();
-    return type !== "hidden" && type !== "file" && type !== "checkbox" && type !== "radio" && !label.contains(el);
-  });
-  if (inputs.length) return inputs[0];
+const usable = (el) => {
+  if (!el || !el.matches || !el.matches("input, textarea, select")) return false;
+  const type = (el.getAttribute("type") || "").toLowerCase();
+  if (["hidden", "file", "checkbox", "radio", "submit", "button"].includes(type)) return false;
+  const style = getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden" || !el.getClientRects().length) return false;
+  return el.offsetWidth > 2 && el.offsetHeight > 2;
+};
+let node = label;
+for (let depth = 0; depth < 6 && node; depth += 1) {
+  let sib = node.nextElementSibling;
+  while (sib) {
+    if (usable(sib)) return sib;
+    const inner = sib.querySelector ? [...sib.querySelectorAll("input, textarea, select")].find(usable) : null;
+    if (inner) return inner;
+    sib = sib.nextElementSibling;
+  }
+  node = node.parentElement;
 }
 return null;
 """
@@ -390,23 +399,66 @@ def _login(driver: webdriver.Chrome, username: str, password: str) -> None:
     else:
         raise RuntimeError(f"The Ersal sign-in page did not open. Chrome showed {_page_clue(driver)}")
     field = _find_field(driver, "Nom d'utilisateur") or _first_text_input(driver)
-    secret = _password_field(driver)
+    secret = _find_field(driver, "Mot de passe") or _password_field(driver)
     if field is None or secret is None:
         raise RuntimeError("Could not find the Ersal username or password field")
-    _write(driver, field, username)
-    _write(driver, secret, password)
-    try:
-        _click(driver, "Se connecter", exact=True, timeout=5)
-    except RuntimeError:
-        secret.send_keys(Keys.ENTER)
+    # The sign-in box takes the short name, as in f.guerouali, not the mail address.
+    login_name = username.split("@", 1)[0].strip() if "@" in username else username.strip()
+    _step(f"Signing in as {login_name}")
+    _write(driver, field, login_name, require=True)
+    _write(driver, secret, password, require=True)
+    _submit_login(driver, secret)
     deadline = time.time() + 40
     while time.time() < deadline:
         if _page_has(driver, "nouvelle demande") or _page_has(driver, "mes demandes"):
             return
-        if _page_has(driver, "incorrect") or _page_has(driver, "invalide"):
-            break
+        if _rejected(driver):
+            raise RuntimeError("Ersal did not accept the username or password. Check them in Settings.")
         time.sleep(0.4)
-    raise RuntimeError("Ersal did not accept the username or password. Check them in Settings.")
+    try:
+        still_empty = not (secret.get_attribute("value") or "").strip()
+    except WebDriverException:
+        still_empty = False
+    if still_empty:
+        raise RuntimeError("The Ersal password field stayed empty. Check the password in Settings.")
+    raise RuntimeError(f"Ersal stayed on the sign-in page. Chrome showed {_page_clue(driver)}")
+
+
+def _rejected(driver: webdriver.Chrome) -> bool:
+    text = _norm(_visible_text(driver))
+    return any(part in text for part in ("incorrect", "echec", "refus"))
+
+
+def _submit_login(driver: webdriver.Chrome, secret) -> None:
+    """Se connecter stays grey until the password is really in the box."""
+    driver.execute_script(
+        """
+        const secret = arguments[0];
+        const form = secret.form;
+        const norm = (value) => (value || "")
+          .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/\\s+/g, " ").trim().toLowerCase();
+        for (const node of document.querySelectorAll("button, input[type='submit'], a, span")) {
+          const text = norm(node.value || node.innerText || "");
+          if (text !== "se connecter") continue;
+          node.disabled = false;
+          node.removeAttribute("disabled");
+          node.setAttribute("aria-disabled", "false");
+        }
+        try {
+          if (form && typeof form.requestSubmit === "function") form.requestSubmit();
+          else if (form) form.submit();
+        } catch (error) {}
+        """,
+        secret,
+    )
+    try:
+        _click(driver, "Se connecter", exact=True, timeout=3)
+    except RuntimeError:
+        try:
+            secret.send_keys(Keys.ENTER)
+        except WebDriverException:
+            pass
 
 
 def _upload(driver: webdriver.Chrome, path: Path) -> None:
@@ -479,40 +531,61 @@ def _fill_if_present(driver: webdriver.Chrome, label: str, value: str) -> None:
     _write(driver, field, value)
 
 
-def _write(driver: webdriver.Chrome, field, value: str) -> None:
-    """Type into a field. Ersal often leaves the real input hidden behind its label."""
-    driver.execute_script(
-        """
-        const el = arguments[0];
-        el.scrollIntoView({block: 'center', inline: 'nearest'});
-        el.removeAttribute('readonly');
-        el.removeAttribute('disabled');
-        el.style.setProperty('display', 'block', 'important');
-        el.style.setProperty('visibility', 'visible', 'important');
-        el.style.setProperty('opacity', '1', 'important');
-        el.focus();
-        """,
-        field,
-    )
+def _write(driver: webdriver.Chrome, field, value: str, require: bool = False) -> None:
+    """Type into a field, then check the value stayed. A greyed-out button means it did not."""
+    driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'}); arguments[0].focus();", field)
     try:
-        field.send_keys(Keys.CONTROL, "a")
-        field.send_keys(Keys.DELETE)
-        field.send_keys(value)
-        field.send_keys(Keys.TAB)
-        return
+        field.click()
     except WebDriverException:
         pass
+    try:
+        field.clear()
+    except WebDriverException:
+        _set_input_value(driver, field, "")
+    try:
+        field.send_keys(value)
+    except WebDriverException:
+        pass
+    if (field.get_attribute("value") or "") != value:
+        _set_input_value(driver, field, value)
+    if (field.get_attribute("value") or "") != value:
+        for character in value:
+            try:
+                field.send_keys(character)
+            except WebDriverException:
+                break
+    if (field.get_attribute("value") or "") != value:
+        _set_input_value(driver, field, value)
+    _fire_input(driver, field)
+    if require and (field.get_attribute("value") or "") != value:
+        kind = "password" if (field.get_attribute("type") or "").lower() == "password" else "sign-in"
+        raise RuntimeError(f"Could not type into the Ersal {kind} field")
+
+
+def _set_input_value(driver: webdriver.Chrome, field, value: str) -> None:
     driver.execute_script(
         """
         const el = arguments[0];
         const value = arguments[1];
-        el.focus();
-        el.value = value;
-        el.dispatchEvent(new Event('input', {bubbles: true}));
-        el.dispatchEvent(new Event('change', {bubbles: true}));
+        const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const desc = Object.getOwnPropertyDescriptor(proto, "value");
+        if (desc && desc.set) desc.set.call(el, value);
+        else el.value = value;
         """,
         field,
         value,
+    )
+
+
+def _fire_input(driver: webdriver.Chrome, field) -> None:
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        el.dispatchEvent(new Event("input", {bubbles: true}));
+        el.dispatchEvent(new Event("change", {bubbles: true}));
+        el.dispatchEvent(new KeyboardEvent("keyup", {bubbles: true}));
+        """,
+        field,
     )
 
 
@@ -821,8 +894,8 @@ def _shown(element) -> bool:
 
 def _password_field(driver: webdriver.Chrome):
     def pick(elements):
-        visible = [item for item in elements if _shown(item)]
-        return (visible or elements or [None])[0]
+        visible = [item for item in elements if _shown(item) and item.size.get("width", 0) > 2]
+        return visible[0] if visible else None
 
     driver.switch_to.default_content()
     found = pick(driver.find_elements(By.CSS_SELECTOR, "input[type='password']"))
