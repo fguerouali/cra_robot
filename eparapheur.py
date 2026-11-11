@@ -485,23 +485,27 @@ def _submit_login(driver: webdriver.Chrome, secret) -> None:
 
 def _open_new_request(driver: webdriver.Chrome) -> None:
     """The file field exists only inside the form opened by Ajouter Nouvelle Demande."""
-    try:
-        _press(driver, "Ajouter Nouvelle Demande", exact=True, timeout=12)
-    except RuntimeError:
-        _press(driver, "nouvelle demande", timeout=8)
-    deadline = time.time() + 20
+    deadline = time.time() + 25
     while time.time() < deadline:
         if _add_form_open(driver):
             return
-        time.sleep(0.4)
+        try:
+            _press(driver, "Ajouter Nouvelle Demande", exact=True, timeout=4)
+        except RuntimeError:
+            try:
+                _press(driver, "nouvelle demande", timeout=4)
+            except RuntimeError:
+                pass
+        time.sleep(0.6)
     raise RuntimeError(f"The new request form did not open. Chrome showed {_page_clue(driver)}")
 
 
 def _add_form_open(driver: webdriver.Chrome) -> bool:
+    # "Type du document" is also a column on the inbox, so it does not mean the form is open.
     return (
         _page_has(driver, "nom de fichier")
         or _page_has(driver, "choisir des fichiers")
-        or _page_has(driver, "type du document")
+        or _page_has(driver, "titre du document")
     )
 
 
@@ -512,18 +516,19 @@ def _press(driver: webdriver.Chrome, text: str, exact: bool = False, timeout: fl
         node = _find(driver, text, exact)
         if node is not None and not _disabled(driver, node):
             try:
-                driver.execute_script(
+                button = driver.execute_script(
                     """
                     const node = arguments[0];
                     const button = node.closest(".dijitButton, .dijitDropDownButton, button, a, [role='button']") || node;
                     button.scrollIntoView({block: "center", inline: "nearest"});
-                    const target = button === node ? node : button;
-                    for (const type of ["mousedown", "mouseup", "click"]) {
-                      target.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
-                    }
+                    return button;
                     """,
                     node,
                 )
+                try:
+                    button.click()
+                except WebDriverException:
+                    driver.execute_script("arguments[0].click()", button)
                 return
             except StaleElementReferenceException:
                 pass
