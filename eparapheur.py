@@ -114,8 +114,11 @@ const labels = [];
 for (const node of document.querySelectorAll("label, span, td, div, legend")) {
   const text = textOf(node);
   if (!text || text.length > 80 || !matches(text) || !shown(node)) continue;
+  if (node.closest("[role='columnheader'], thead, .gridxHeader, .dojoxGridHeader, .dijitGridHeader")) continue;
   labels.push(node);
 }
+const inDialog = labels.filter((node) => node.closest(".dijitDialog, [role='dialog']"));
+if (inDialog.length) labels.splice(0, labels.length, ...inDialog);
 labels.sort((a, b) => textOf(a).length - textOf(b).length);
 for (const label of labels) {
   const owner = label.closest("label");
@@ -142,13 +145,19 @@ return null;
 _OPTIONS_JS = """
 const seen = new Set();
 const out = [];
-for (const node of document.querySelectorAll(".dijitMenuItem, [role='option']")) {
-  const style = getComputedStyle(node);
-  if (style.display === "none" || style.visibility === "hidden" || !node.getClientRects().length) continue;
-  const text = (node.innerText || "").replace(/\\s+/g, " ").trim();
-  if (!text || seen.has(text)) continue;
-  seen.add(text);
-  out.push(text);
+const menus = [...document.querySelectorAll(".dijitMenuPopup, .dijitComboBoxMenu, [role='listbox']")].filter((menu) => {
+  const style = getComputedStyle(menu);
+  return style.display !== "none" && style.visibility !== "hidden" && menu.getClientRects().length && menu.offsetHeight > 2;
+});
+for (const menu of menus) {
+  for (const node of menu.querySelectorAll(".dijitMenuItem, [role='option']")) {
+    const style = getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || !node.getClientRects().length) continue;
+    const text = (node.innerText || "").replace(/\\s+/g, " ").trim();
+    if (!text || text.length > 80 || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+  }
 }
 return out;
 """
@@ -572,8 +581,13 @@ def _choose(driver: webdriver.Chrome, label: str, pick, hint: str) -> None:
     if field is None:
         raise RuntimeError(f"Could not find {label} on the Ersal form. Chrome showed {_page_clue(driver)}")
     _open_arrow(driver, field)
-    time.sleep(0.5)
-    options = _options(driver)
+    options = []
+    opened = time.time() + 3
+    while time.time() < opened:
+        options = _options(driver)
+        if options:
+            break
+        time.sleep(0.2)
     chosen = pick(options) if options else None
     if chosen is None and hint:
         field = _find_field(driver, label)
@@ -697,15 +711,7 @@ def _open_arrow(driver: webdriver.Chrome, field) -> None:
 def _options(driver: webdriver.Chrome) -> list[str]:
     found: list[str] = []
     driver.switch_to.default_content()
-    found.extend(driver.execute_script(_OPTIONS_JS) or [])
-    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
-    for frame in frames:
-        driver.switch_to.default_content()
-        try:
-            driver.switch_to.frame(frame)
-        except WebDriverException:
-            continue
-        found.extend(driver.execute_script(_OPTIONS_JS) or [])
+    _collect_options(driver, found, 0)
     driver.switch_to.default_content()
     unique = []
     for option in found:
@@ -714,36 +720,75 @@ def _options(driver: webdriver.Chrome) -> list[str]:
     return unique
 
 
+def _collect_options(driver: webdriver.Chrome, found: list[str], depth: int) -> None:
+    try:
+        found.extend(driver.execute_script(_OPTIONS_JS) or [])
+    except WebDriverException:
+        pass
+    if depth >= 3:
+        return
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        _collect_options(driver, found, depth + 1)
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return
+
+
 def _click_option(driver: webdriver.Chrome, text: str) -> None:
     script = """
     const wanted = arguments[0];
     const norm = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
     const target = norm(wanted);
-    for (const node of document.querySelectorAll(".dijitMenuItem, [role='option']")) {
-      if (!node.getClientRects().length) continue;
-      if (norm(node.innerText) === target) return node;
+    const menus = [...document.querySelectorAll(".dijitMenuPopup, .dijitComboBoxMenu, [role='listbox']")];
+    for (const menu of menus) {
+      for (const node of menu.querySelectorAll(".dijitMenuItem, [role='option']")) {
+        if (!node.getClientRects().length) continue;
+        if (norm(node.innerText) === target) return node;
+      }
     }
     return null;
     """
     driver.switch_to.default_content()
-    node = driver.execute_script(script, text)
-    if node is None:
-        frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
-        for frame in frames:
-            driver.switch_to.default_content()
-            try:
-                driver.switch_to.frame(frame)
-            except WebDriverException:
-                continue
-            node = driver.execute_script(script, text)
-            if node is not None:
-                break
+    node = _find_option(driver, script, text, 0)
     if node is None:
         raise RuntimeError(f"The choice “{text}” disappeared from the list")
     try:
         node.click()
     except WebDriverException:
         driver.execute_script("arguments[0].click()", node)
+
+
+def _find_option(driver: webdriver.Chrome, script: str, text: str, depth: int):
+    try:
+        found = driver.execute_script(script, text)
+    except WebDriverException:
+        found = None
+    if found is not None:
+        return found
+    if depth >= 3:
+        return None
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        found = _find_option(driver, script, text, depth + 1)
+        if found is not None:
+            return found
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return None
+    return None
 
 
 def _wait_for_row(driver: webdriver.Chrome, filename: str) -> None:
