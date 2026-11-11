@@ -1,6 +1,7 @@
 <#
   One-time setup of the Windows server. Run it in an elevated PowerShell, logged in (RDP) as the
-  account that will run the app — the Power BI sign-in window opens on that account's desktop.
+  account that will run the app. Keep that session open (disconnect, do not sign out): the app runs in it.
+  Power BI sign-in happens in any browser at http://<server-ip>:<port>/signin.
 
     powershell -ExecutionPolicy Bypass -File .\deploy\setup-server.ps1 [-RunnerToken <token>]
 
@@ -52,7 +53,7 @@ if (-not $chrome) {
 }
 
 # --- Launcher + scheduled task ------------------------------------------------------------------
-# The task runs at logon in the user's own session, so the sign-in Chrome window is visible over RDP.
+# The task runs at logon in the user's own session. SIGNIN_IN_BROWSER shows the sign-in at /signin.
 @"
 @echo off
 set APP_DATA=$Root\data

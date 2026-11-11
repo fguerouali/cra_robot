@@ -1,0 +1,23 @@
+name: Deploy to the RDP server
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the current one instead of cancelling it mid-copy.
+concurrency:
+  group: deploy-rdp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Self-hosted runner installed on the server by deploy/setup-server.ps1 (172.31.x is private).
+    runs-on: [self-hosted, windows, cra-rdp]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy and restart the app
+        shell: powershell
+        run: .\deploy\deploy.ps1 -Source "$env:GITHUB_WORKSPACE"
