@@ -338,7 +338,7 @@ def transfer(
     _open_row(driver, monthly.name)
     _step("Filling the form")
     _type_into(driver, ("Raison Sociale Fournisseur", "Raison sociale"), company)
-    _type_into(driver, ("Nom du prestataire", "Nom du prestataire"), provider)
+    _type_into(driver, ("Nom commerciale prestataire", "Nom commercial prestataire", "Nom du prestataire"), provider)
     _type_into(driver, ("Nombre de jours travaillés", "Nombre de jours travailles"), days)
     _type_into(driver, ("Descriptif de la demande",), description)
     _set_project_code(driver)
@@ -661,9 +661,20 @@ def _fire_input(driver: webdriver.Chrome, field) -> None:
     driver.execute_script(
         """
         const el = arguments[0];
+        const value = el.value;
+        const box = el.closest("[widgetid], .dijitTextBox, .dijitValidationTextBox") || el;
+        const id = box.getAttribute("widgetid") || box.id || el.id;
+        const widget = window.dijit && dijit.byId
+          ? (dijit.byId(id) || dijit.byId(el.id) || (dijit.getEnclosingWidget && dijit.getEnclosingWidget(el)))
+          : null;
+        if (widget && typeof widget.set === "function") {
+          widget.set("value", value);
+          if (Object.prototype.hasOwnProperty.call(widget, "displayedValue")) widget.set("displayedValue", value);
+        }
         el.dispatchEvent(new Event("input", {bubbles: true}));
         el.dispatchEvent(new Event("change", {bubbles: true}));
         el.dispatchEvent(new KeyboardEvent("keyup", {bubbles: true}));
+        el.blur();
         """,
         field,
     )
