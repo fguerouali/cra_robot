@@ -127,6 +127,7 @@ def workflow(
             if stop_requested():
                 raise RuntimeError("Stopped")
             _select_only_week(driver, week)
+            _expand_weekly_activities(driver, week)
             say(f"Downloading week {week} ({number} of {len(week_values)})")
             weeks.append(_export_current_page(driver, output_folder, file_stem, week))
         if len(weeks) > 1:
@@ -647,6 +648,140 @@ def _week_values(driver: WebDriver) -> list[str]:
     if not seen:
         raise RuntimeError("The weekly report lists no weeks for this month.")
     return sorted(seen, key=lambda value: int(value) if value.isdigit() else value)
+
+
+def _expand_weekly_activities(driver: WebDriver, week: str) -> None:
+    """Open one level of the weekly matrix: the plus beside the resource name, for this week."""
+    say(f"Expanding the activities for week {week}")
+    deadline = time.monotonic() + 20
+    clicked = False
+    try:
+        while time.monotonic() < deadline:
+            if not clicked:
+                button = _first_expand_button(driver)
+                if button is not None:
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'})", button)
+                    except WebDriverException:
+                        pass
+                    try:
+                        _click(button, "the plus next to the name")
+                    except RuntimeError:
+                        _js_click(driver, button, "the plus next to the name")
+                    clicked = True
+            if clicked and _activities_opened(driver):
+                return
+            time.sleep(0.4)
+        raise RuntimeError(f"Could not expand the activities for week {week}. The plus next to the name did not open.")
+    finally:
+        driver.switch_to.default_content()
+
+
+_EXPAND_JS = """
+const visible = (el) => {
+  const box = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  return box.width >= 8 && box.height >= 8 && box.width <= 40 && box.height <= 40
+    && style.visibility !== "hidden" && style.display !== "none" && Number(style.opacity) !== 0;
+};
+const cls = (el) => String((el.className && el.className.baseVal) || el.className || "");
+const name = (el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+const collapsed = (el) => {
+  if (el.getAttribute("aria-expanded") === "true") return false;
+  const label = name(el);
+  const kind = cls(el);
+  if (/collapse|réduire|reduire/.test(label) || /minus|chevron-down/.test(kind)) return false;
+  if (/explore-content-plus|glyph-plus|expandbutton|expand-button/.test(kind)) return true;
+  if (/\\bexpand\\b|développer|developper/.test(label)) return true;
+  return el.getAttribute("aria-expanded") === "false" && /expand|plus/.test(kind + " " + label);
+};
+const nodes = [...document.querySelectorAll("button, [role='button'], i, span, div, svg")]
+  .filter((el) => visible(el) && collapsed(el));
+nodes.sort((a, b) => {
+  const left = a.getBoundingClientRect();
+  const right = b.getBoundingClientRect();
+  return left.top - right.top || left.left - right.left;
+});
+if (!nodes.length) return null;
+return nodes[0].closest("button, [role='button']") || nodes[0];
+"""
+
+_OPENED_JS = """
+const cls = (el) => String((el.className && el.className.baseVal) || el.className || "");
+const name = (el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+return [...document.querySelectorAll("button, [role='button'], i, span, div, svg")].some((el) => {
+  const box = el.getBoundingClientRect();
+  if (box.width < 8 || box.height < 8 || box.width > 40 || box.height > 40) return false;
+  const label = name(el);
+  const kind = cls(el);
+  return /collapse|réduire|reduire/.test(label) || /minus|chevron-down/.test(kind) || el.getAttribute("aria-expanded") === "true";
+});
+"""
+
+
+def _first_expand_button(driver: WebDriver):
+    driver.switch_to.default_content()
+    return _expand_button_here(driver, 0)
+
+
+def _expand_button_here(driver: WebDriver, depth: int):
+    try:
+        found = driver.execute_script(_EXPAND_JS)
+    except WebDriverException:
+        found = None
+    if found is not None:
+        return found
+    if depth >= 3:
+        return None
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        found = _expand_button_here(driver, depth + 1)
+        if found is not None:
+            return found
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return None
+    return None
+
+
+def _activities_opened(driver: WebDriver) -> bool:
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        driver.switch_to.default_content()
+        if _opened_here(driver, 0):
+            return True
+        time.sleep(0.3)
+    return False
+
+
+def _opened_here(driver: WebDriver, depth: int) -> bool:
+    try:
+        if driver.execute_script(_OPENED_JS):
+            return True
+    except WebDriverException:
+        pass
+    if depth >= 3:
+        return False
+    frames = driver.find_elements(By.CSS_SELECTOR, "iframe")
+    for frame in frames:
+        try:
+            driver.switch_to.frame(frame)
+        except WebDriverException:
+            continue
+        if _opened_here(driver, depth + 1):
+            return True
+        try:
+            driver.switch_to.parent_frame()
+        except WebDriverException:
+            driver.switch_to.default_content()
+            return False
+    return False
 
 
 def _select_only_week(driver: WebDriver, week: str) -> None:
